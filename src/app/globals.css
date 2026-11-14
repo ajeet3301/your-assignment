@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FBF7EE;
+  --foreground: #14213D;
+  --paper-cream: #FBF7EE;
+  --paper-white: #FFFFFF;
+  --ink-blue: #1F3A8A;
+  --deep-ink: #14213D;
+  --margin-red: #E5484D;
+  --highlighter-yellow: #FFE066;
+  --muted-grey: #6B7280;
+}
+
+@theme inline {
+  --color-paper-cream: var(--paper-cream);
+  --color-paper-white: var(--paper-white);
+  --color-ink-blue: var(--ink-blue);
+  --color-deep-ink: var(--deep-ink);
+  --color-margin-red: var(--margin-red);
+  --color-highlighter-yellow: var(--highlighter-yellow);
+  --color-muted-grey: var(--muted-grey);
+}
+
+body {
+  background-color: var(--paper-cream);
+  color: var(--deep-ink);
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* Notebook ruled line divider */
+.ruled-divider {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(31, 58, 138, 0.25) 0,
+    rgba(31, 58, 138, 0.25) 8px,
+    transparent 8px,
+    transparent 12px
+  );
+}
+
+/* Red Margin Line decoration */
+.margin-line-left {
+  position: relative;
+}
+.margin-line-left::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 24px;
+  width: 2px;
+  background-color: rgba(229, 72, 77, 0.45);
+}
+
+/* Hand-drawn highlighter glow */
+.highlight-pen {
+  background: linear-gradient(104deg, rgba(255, 224, 102, 0) 0.9%, rgba(255, 224, 102, 0.75) 2.4%, rgba(255, 224, 102, 0.5) 94%, rgba(255, 224, 102, 0.1) 98%);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* Custom scrollbars for clean notebook editor */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F4EEDC;
+}
+::-webkit-scrollbar-thumb {
+  background: #D3C9AF;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B9AE90;
+}
