@@ -12,6 +12,7 @@ import {
 import {
   extractQuestionsFromInput,
   formatQuestionListPreview,
+  extractQuestionsFromPreviewText,
   MAX_FILE_SIZE_BYTES,
 } from './question-extractor';
 import { solveQuestionWithAi } from './bot-ai';
@@ -74,6 +75,20 @@ export async function getTelegramBot(): Promise<Bot | null> {
 }
 
 /**
+ * Helper to build high-convenience question confirmation keyboard
+ */
+function createQuestionsConfirmKeyboard(isHindi: boolean = false): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(isHindi ? '🚀 तुरंत DOCX बनाएं' : '🚀 Quick Generate DOCX', 'quick_generate')
+    .row()
+    .text(isHindi ? '📖 केवल थ्योरी (Theory Only)' : '📖 Theory Only', 'ans_theory')
+    .text(isHindi ? '💻 कोड + आउटपुट' : '💻 Code + Screenshots', 'ans_code')
+    .row()
+    .text(isHindi ? '⚙️ नाम व सेटिंग्स बदलें' : '⚙️ Customize Header & Options', 'confirm_questions_ok')
+    .text(isHindi ? '❌ रद्द करें' : '❌ Cancel', 'action_cancel');
+}
+
+/**
  * Registers all commands, message handlers, and callback query actions
  */
 function registerBotHandlers(bot: Bot) {
@@ -109,7 +124,7 @@ function registerBotHandlers(bot: Bot) {
 
   // 2. /new command
   bot.command('new', async (ctx) => {
-    const session = resetSession(ctx.chat.id);
+    const session = resetSession(ctx.chat.id, true);
     const msg = session.isHindi
       ? `✨ **नया असाइनमेंट शुरू हुआ!**\n\nकृपया अपने प्रश्न टेक्स्ट में भेजें, या .txt, .docx, .pdf, या इमेज फाइल अपलोड करें।`
       : `✨ **New Assignment started!**\n\nPlease send your question text, or upload a .txt, .docx, .pdf, or image file.`;
@@ -118,7 +133,7 @@ function registerBotHandlers(bot: Bot) {
 
   // 3. /cancel command
   bot.command('cancel', async (ctx) => {
-    resetSession(ctx.chat.id);
+    resetSession(ctx.chat.id, true);
     await ctx.reply('❌ Current workflow cancelled. Send /new to start over.');
   });
 
@@ -193,13 +208,9 @@ function registerBotHandlers(bot: Bot) {
         currentStep: 'confirm_questions',
       });
 
-      const keyboard = new InlineKeyboard()
-        .text('✅ Confirm & Continue (OK)', 'confirm_questions_ok')
-        .text('❌ Cancel', 'action_cancel');
-
       await ctx.reply(formatQuestionListPreview(result.questions, session.isHindi), {
         parse_mode: 'Markdown',
-        reply_markup: keyboard,
+        reply_markup: createQuestionsConfirmKeyboard(session.isHindi),
       });
     } catch (err: any) {
       await ctx.reply(`⚠️ Failed to process uploaded document: ${err.message}`);
@@ -241,13 +252,9 @@ function registerBotHandlers(bot: Bot) {
         currentStep: 'confirm_questions',
       });
 
-      const keyboard = new InlineKeyboard()
-        .text('✅ Confirm & Continue (OK)', 'confirm_questions_ok')
-        .text('❌ Cancel', 'action_cancel');
-
       await ctx.reply(formatQuestionListPreview(result.questions, session.isHindi), {
         parse_mode: 'Markdown',
-        reply_markup: keyboard,
+        reply_markup: createQuestionsConfirmKeyboard(session.isHindi),
       });
     } catch (err: any) {
       await ctx.reply(`⚠️ Failed to analyze photo: ${err.message}`);
@@ -278,13 +285,9 @@ function registerBotHandlers(bot: Bot) {
             currentStep: 'confirm_questions',
           });
 
-          const keyboard = new InlineKeyboard()
-            .text('✅ Confirm & Continue (OK)', 'confirm_questions_ok')
-            .text('❌ Cancel', 'action_cancel');
-
           await ctx.reply(formatQuestionListPreview(result.questions, session.isHindi), {
             parse_mode: 'Markdown',
-            reply_markup: keyboard,
+            reply_markup: createQuestionsConfirmKeyboard(session.isHindi),
           });
         } else {
           await ctx.reply(
@@ -310,30 +313,41 @@ function registerBotHandlers(bot: Bot) {
               await ctx.reply(`🗑️ Removed question ${numMatch[0]}.`);
               await ctx.reply(formatQuestionListPreview(session.questions, session.isHindi), {
                 parse_mode: 'Markdown',
-                reply_markup: new InlineKeyboard()
-                  .text('✅ Confirm & Continue (OK)', 'confirm_questions_ok')
-                  .text('❌ Cancel', 'action_cancel'),
+                reply_markup: createQuestionsConfirmKeyboard(session.isHindi),
               });
             } else {
               await ctx.reply(`⚠️ Question number ${numMatch[0]} not found.`);
             }
           }
         } else {
-          // Add new question
-          const newQ = {
-            id: `q-${session.questions.length + 1}`,
-            numberLabel: `Q${session.questions.length + 1}`,
-            text,
-            type: 'theory',
-          };
-          session.questions.push(newQ);
+          // Parse potential multiple questions from incoming text
+          const extracted = await extractQuestionsFromInput({ text });
+          const newItems =
+            extracted.success && extracted.questions.length > 0
+              ? extracted.questions
+              : [
+                  {
+                    id: `q-${session.questions.length + 1}`,
+                    numberLabel: `Q${session.questions.length + 1}`,
+                    text,
+                    type: 'theory',
+                  },
+                ];
+
+          for (const item of newItems) {
+            const nextIdx = session.questions.length + 1;
+            session.questions.push({
+              ...item,
+              id: `q-${nextIdx}`,
+              numberLabel: `Q${nextIdx}`,
+            });
+          }
+
           updateSession(chatId, { questions: session.questions });
-          await ctx.reply(`➕ Added question ${newQ.numberLabel}!`);
+          await ctx.reply(`➕ Added ${newItems.length} question(s)!`);
           await ctx.reply(formatQuestionListPreview(session.questions, session.isHindi), {
             parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard()
-              .text('✅ Confirm & Continue (OK)', 'confirm_questions_ok')
-              .text('❌ Cancel', 'action_cancel'),
+            reply_markup: createQuestionsConfirmKeyboard(session.isHindi),
           });
         }
         break;
@@ -373,6 +387,20 @@ function registerBotHandlers(bot: Bot) {
 
       case 'step4_header_name': {
         if (text.toLowerCase() !== 'skip') {
+          // Detect if roll number was also provided e.g. "Ajeet kumar (255ISC014)"
+          const parenMatch = text.match(/^([^\(\)]+)\s*\(([^)]+)\)$/);
+          if (parenMatch) {
+            const name = parenMatch[1].trim();
+            const roll = parenMatch[2].trim();
+            session.header.studentName = name;
+            session.header.rollNo = roll;
+            saveUserPreferences(chatId, { name, rollNo: roll });
+            await ctx.reply(`👤 Student: **${name}**\n🆔 Roll: **${roll}**`, { parse_mode: 'Markdown' });
+            updateSession(chatId, { header: session.header, currentStep: 'step4_header_course' });
+            await promptStep4Course(ctx);
+            break;
+          }
+
           session.header.studentName = text;
           saveUserPreferences(chatId, { name: text });
         }
@@ -393,6 +421,20 @@ function registerBotHandlers(bot: Bot) {
 
       case 'step4_header_course': {
         if (text.toLowerCase() !== 'skip') {
+          // Detect if course and subject are provided together e.g. "int btech cse — Database management lab"
+          const delimiterMatch = text.match(/^(.+?)\s*(?:—|–|-|\|)\s*(.+)$/);
+          if (delimiterMatch) {
+            const course = delimiterMatch[1].trim();
+            const subject = delimiterMatch[2].trim();
+            session.header.className = course;
+            session.header.subject = subject;
+            saveUserPreferences(chatId, { course, subject });
+            await ctx.reply(`🎓 Course: **${course}**\n📚 Subject: **${subject}**`, { parse_mode: 'Markdown' });
+            updateSession(chatId, { header: session.header, currentStep: 'step4_header_title' });
+            await promptStep4Title(ctx);
+            break;
+          }
+
           session.header.className = text;
           saveUserPreferences(chatId, { course: text });
         }
@@ -437,18 +479,50 @@ function registerBotHandlers(bot: Bot) {
     if (!chatId) return;
 
     await ctx.answerCallbackQuery();
-    const session = getSession(chatId);
+    let session = getSession(chatId);
+
+    // Auto-recover questions across serverless container boundaries
+    if (session.questions.length === 0) {
+      const prefs = getUserPreferences(chatId);
+      if (prefs.lastQuestions && prefs.lastQuestions.length > 0) {
+        session = updateSession(chatId, {
+          questions: [...prefs.lastQuestions],
+          rawText: prefs.lastRawText || '',
+        });
+      } else if (
+        ctx.callbackQuery?.message &&
+        'text' in ctx.callbackQuery.message &&
+        ctx.callbackQuery.message.text
+      ) {
+        const recovered = extractQuestionsFromPreviewText(ctx.callbackQuery.message.text);
+        if (recovered.length > 0) {
+          session = updateSession(chatId, { questions: recovered });
+          saveUserPreferences(chatId, { lastQuestions: recovered });
+        }
+      }
+    }
 
     // Commands / Navigation
     if (data === 'action_new') {
-      resetSession(chatId);
+      resetSession(chatId, true);
       await ctx.reply('✨ Send your questions as text or upload a document/photo to begin.');
       return;
     }
 
     if (data === 'action_cancel') {
-      resetSession(chatId);
+      resetSession(chatId, true);
       await ctx.reply('❌ Assignment session cancelled. Send /new anytime.');
+      return;
+    }
+
+    if (data === 'quick_generate') {
+      if (session.questions.length === 0) {
+        await ctx.reply(
+          `⚠️ **No questions detected!**\nPlease send your assignment questions as text or upload a document before generating.`
+        );
+        return;
+      }
+      await executeAndSendAssignment(ctx);
       return;
     }
 
@@ -545,6 +619,14 @@ function registerBotHandlers(bot: Bot) {
 
     // Step 5: Generate
     if (data === 'generate_docx') {
+      if (session.questions.length === 0) {
+        await ctx.reply(
+          session.isHindi
+            ? `⚠️ **सत्र में कोई प्रश्न नहीं मिले!** कृपया असाइनमेंट बनाने के लिए प्रश्न भेजें। नया सत्र शुरू करने के लिए /new लिखें।`
+            : `⚠️ **No questions detected in session!**\nPlease send your assignment questions or upload a document/photo.\n\nSend /new to start fresh.`
+        );
+        return;
+      }
       await executeAndSendAssignment(ctx);
       return;
     }
@@ -745,8 +827,34 @@ async function promptStep4Title(ctx: any) {
 }
 
 async function renderSummaryCard(ctx: any) {
-  const session = getSession(ctx.chat.id);
+  let session = getSession(ctx.chat.id);
   const isHindi = session.isHindi;
+
+  // Auto-recovery across cold serverless containers
+  if (session.questions.length === 0) {
+    const prefs = getUserPreferences(ctx.chat.id);
+    if (prefs.lastQuestions && prefs.lastQuestions.length > 0) {
+      session = updateSession(ctx.chat.id, {
+        questions: [...prefs.lastQuestions],
+        rawText: prefs.lastRawText || '',
+      });
+    }
+  }
+
+  // If questions are still empty, alert user with clear action
+  if (session.questions.length === 0) {
+    const warningText = isHindi
+      ? `⚠️ **सत्र में कोई प्रश्न नहीं मिले!**\n\nकृपया अपने असाइनमेंट के प्रश्न टेक्स्ट के रूप में भेजें या कोई फाइल (.txt, .docx, .pdf, photo) अपलोड करें।\n\nनया असाइनमेंट शुरू करने के लिए /new भेजें।`
+      : `⚠️ **No questions found in this session!**\n\nPlease send your assignment questions as text or upload a document/photo to begin.\n\nSend /new to start fresh.`;
+
+    const warnKeyboard = new InlineKeyboard().text(
+      isHindi ? '📝 नया असाइनमेंट (/new)' : '📝 New Assignment (/new)',
+      'action_new'
+    );
+
+    await ctx.reply(warningText, { parse_mode: 'Markdown', reply_markup: warnKeyboard });
+    return;
+  }
 
   const card =
     `📋 **${isHindi ? 'असाइनमेंट सारांश (Assignment Summary)' : 'Assignment Submission Summary'}**\n\n` +
@@ -780,7 +888,27 @@ async function renderSummaryCard(ctx: any) {
 
 async function executeAndSendAssignment(ctx: any) {
   const chatId = ctx.chat.id;
-  const session = getSession(chatId);
+  let session = getSession(chatId);
+
+  // Auto-recovery across cold serverless containers
+  if (session.questions.length === 0) {
+    const prefs = getUserPreferences(chatId);
+    if (prefs.lastQuestions && prefs.lastQuestions.length > 0) {
+      session = updateSession(chatId, {
+        questions: [...prefs.lastQuestions],
+        rawText: prefs.lastRawText || '',
+      });
+    }
+  }
+
+  if (session.questions.length === 0) {
+    await ctx.reply(
+      session.isHindi
+        ? `⚠️ **कोई प्रश्न नहीं मिला!** कृपया असाइनमेंट बनाने से पहले प्रश्न भेजें। नया सत्र शुरू करने के लिए /new लिखें।`
+        : `⚠️ **No questions detected!** Please send your assignment questions as text or upload a file before generating.\n\nType /new to start fresh.`
+    );
+    return;
+  }
 
   // Rate limiting check: max 5 docs per hour
   const rate = checkRateLimit(chatId);

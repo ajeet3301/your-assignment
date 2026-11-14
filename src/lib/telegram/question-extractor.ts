@@ -214,3 +214,37 @@ export function formatQuestionListPreview(questions: ParsedQuestion[], isHindi: 
 
   return header + items.join('\n') + footer;
 }
+
+/**
+ * Reconstructs question objects from a Telegram question list preview text
+ * Enables zero-state loss recovery across serverless container restarts
+ */
+export function extractQuestionsFromPreviewText(previewText: string): ParsedQuestion[] {
+  if (!previewText) return [];
+  const lines = previewText.split('\n');
+  const questions: ParsedQuestion[] = [];
+  const lineRegex = /^\s*(?:\*\*)?(?:Q|Question\s*)?(\d+)(?:\*\*)?[:\.\)]\s*(.+)$/i;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('📋') || trimmed.toLowerCase().includes('send ok') || trimmed.includes('आगें')) {
+      continue;
+    }
+    const match = lineRegex.exec(trimmed);
+    if (match) {
+      const qNum = match[1];
+      const qText = match[2].replace(/\*\*/g, '').replace(/\.\.\.$/, '').trim();
+      if (qText) {
+        questions.push({
+          id: `q-${qNum}`,
+          numberLabel: `Q${qNum}`,
+          text: qText,
+          type: 'theory',
+        });
+      }
+    }
+  }
+
+  return questions;
+}
+

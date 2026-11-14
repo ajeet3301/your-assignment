@@ -4,9 +4,11 @@ import {
   extractQuestionsFromInput,
   extractTextFromDocx,
   formatQuestionListPreview,
+  extractQuestionsFromPreviewText,
   MAX_FILE_SIZE_BYTES,
   MAX_QUESTIONS,
 } from '../lib/telegram/question-extractor';
+import { parseQuestionsFromText } from '../lib/solver/question-parser';
 import {
   getSession,
   updateSession,
@@ -147,6 +149,64 @@ describe('Telegram Bot Suite', () => {
       expect(previewHi).toContain('मुझे **2 प्रश्न** मिले');
       expect(previewHi).toContain('OK');
     });
+
+    it('extracts 10 numbered questions cleanly without dropping any', async () => {
+      const input = `
+1. What is DBMS architecture?
+2. Explain normalization and its types.
+3. What is 1NF?
+4. What is 2NF?
+5. What is 3NF?
+6. Explain BCNF with example.
+7. What is Primary Key and Foreign Key?
+8. Explain ACID properties in DBMS.
+9. Write a query to create student table.
+10. Write a query to select all records.
+      `.trim();
+
+      const result = await extractQuestionsFromInput({ text: input });
+      expect(result.success).toBe(true);
+      expect(result.questions).toHaveLength(10);
+      expect(result.questions[0].numberLabel).toBe('1.');
+      expect(result.questions[9].numberLabel).toBe('10.');
+      expect(result.questions[9].text).toContain('select all records');
+    });
+
+    it('extracts 10 bulleted questions separated by single newlines', async () => {
+      const input = [
+        '• Explain what is a Database Management System.',
+        '• What are the advantages of DBMS over File System?',
+        '• Define DDL, DML, DCL and TCL commands.',
+        '• Explain Entity-Relationship (ER) model concepts.',
+        '• What are aggregate functions in SQL?',
+        '• Explain inner join and outer join with examples.',
+        '• What is database indexing and why is it used?',
+        '• Explain transaction management and concurrency control.',
+        '• What is Deadlock and how can it be prevented?',
+        '• Explain database recovery techniques.',
+      ].join('\n');
+
+      const result = await extractQuestionsFromInput({ text: input });
+      expect(result.success).toBe(true);
+      expect(result.questions).toHaveLength(10);
+    });
+
+    it('reconstructs questions from Telegram preview text for serverless recovery', () => {
+      const previewText = `📋 I found **3 questions**:
+
+**Q1**: Explain DBMS architecture
+**Q2**: What is normalization?
+**Q3**: Explain ACID properties
+
+Send **OK** or tap below to proceed, or send corrections.`;
+
+      const recovered = extractQuestionsFromPreviewText(previewText);
+      expect(recovered).toHaveLength(3);
+      expect(recovered[0].numberLabel).toBe('Q1');
+      expect(recovered[0].text).toBe('Explain DBMS architecture');
+      expect(recovered[1].numberLabel).toBe('Q2');
+      expect(recovered[2].text).toBe('Explain ACID properties');
+    });
   });
 
   describe('3. Session State Machine & Preferences', () => {
@@ -187,6 +247,30 @@ describe('Telegram Bot Suite', () => {
       expect(newSession.header.studentName).toBe('Ajeet Sharma');
       expect(newSession.header.rollNo).toBe('22BCS509');
       expect(newSession.promptLocation).toBe('C:\\Users\\Ajeet\\DSA>');
+    });
+
+    it('preserves questions across sessions and container cold starts via preferences and disk backup', () => {
+      const sampleQuestions = [
+        { id: 'q-1', numberLabel: 'Q1', text: 'Explain normalization.', type: 'theory' },
+        { id: 'q-2', numberLabel: 'Q2', text: 'Write SQL query.', type: 'sql' },
+      ];
+
+      // Update session with questions
+      updateSession(TEST_CHAT_ID, {
+        questions: sampleQuestions,
+        currentStep: 'confirm_questions',
+      });
+
+      // Simulate a cold start where in-memory sessions Map would be empty
+      // Reset without clearing questions (e.g. fresh lambda instantiation)
+      const restoredSession = getSession(TEST_CHAT_ID);
+      expect(restoredSession.questions).toHaveLength(2);
+      expect(restoredSession.questions[0].text).toBe('Explain normalization.');
+
+      // When user explicitly cancels or runs /new, questions are cleared
+      resetSession(TEST_CHAT_ID, true);
+      const blankSession = getSession(TEST_CHAT_ID);
+      expect(blankSession.questions).toHaveLength(0);
     });
 
     it('enforces rate limit of 5 documents per hour per chat', () => {

@@ -33,6 +33,8 @@ export interface UserPreferences {
   defaultTerminalStyle?: TerminalStyle;
   defaultPromptLocation?: string;
   preferredLanguage?: 'en' | 'hi';
+  lastQuestions?: ParsedQuestion[];
+  lastRawText?: string;
 }
 
 export interface BotSession {
