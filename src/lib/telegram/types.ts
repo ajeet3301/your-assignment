@@ -23,6 +23,7 @@ export type BotStep =
   | 'completed'; // Document sent, waiting for follow-ups
 
 export type AnswerType = 'theory' | 'code_screenshot';
+export type OutputFormat = 'docx' | 'hw_pdf' | 'both';
 
 export interface UserPreferences {
   name?: string;
@@ -33,6 +34,10 @@ export interface UserPreferences {
   defaultTerminalStyle?: TerminalStyle;
   defaultPromptLocation?: string;
   preferredLanguage?: 'en' | 'hi';
+  defaultOutputFormat?: OutputFormat;
+  defaultHwFont?: string;
+  defaultHwColor?: string;
+  defaultHwPaper?: string;
   lastQuestions?: ParsedQuestion[];
   lastRawText?: string;
 }
@@ -46,6 +51,10 @@ export interface BotSession {
   questions: ParsedQuestion[];
   rawText: string;
   answerType: AnswerType;
+  outputFormat: OutputFormat;
+  hwFont: string;
+  hwColor: string;
+  hwPaper: string;
   includeTerminal: boolean;
   language: string; // "sql", "python", "c", "cpp", "java", "javascript", "auto", etc.
   terminalStyle: TerminalStyle;
@@ -57,6 +66,7 @@ export interface BotSession {
   isHindi: boolean;
   generatedDocxBuffer?: Buffer;
   generatedPdfBuffer?: Buffer;
+  generatedHwPdfBuffer?: Buffer;
   screenshots: { label: string; buffer: Buffer; dataUrl: string }[];
   inputAwaitingQuestionId?: string;
 }

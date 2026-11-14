@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTelegramBot, isTelegramBotEnabled } from '@/lib/telegram/bot';
+import { getTelegramBot, isTelegramBotEnabled } from '../../../../lib/telegram/bot';
 import { waitUntil } from '@vercel/functions';
+
+// Maximum duration for Vercel Serverless Function execution (60 seconds)
+export const maxDuration = 60;
 
 /**
  * Telegram Webhook Route Handler
@@ -43,8 +46,17 @@ export async function POST(req: NextRequest) {
 
     const update = await req.json();
 
-    // Await handleUpdate so message dispatch finishes reliably before function suspension
-    await bot.handleUpdate(update);
+    // Use waitUntil from @vercel/functions so background jobs don't get prematurely killed
+    // and Telegram gets a rapid response while generation proceeds reliably
+    const handlePromise = bot.handleUpdate(update).catch((err) => {
+      console.error('Unhandled handleUpdate error:', err);
+    });
+
+    try {
+      waitUntil(handlePromise);
+    } catch {
+      await handlePromise;
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

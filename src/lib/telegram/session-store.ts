@@ -88,7 +88,7 @@ function persistDiskSessions(): void {
     const obj: Record<number, any> = {};
     for (const [k, v] of sessions.entries()) {
       // Strip large binary buffers before saving to disk JSON
-      const { generatedDocxBuffer, generatedPdfBuffer, ...cleanSession } = v;
+      const { generatedDocxBuffer, generatedPdfBuffer, generatedHwPdfBuffer, ...cleanSession } = v;
       obj[k] = cleanSession;
     }
     fs.writeFileSync(SESSIONS_DISK_FILE, JSON.stringify(obj), 'utf-8');
@@ -117,6 +117,10 @@ function createDefaultSession(chatId: number, userId: number = chatId): BotSessi
     questions: prefs.lastQuestions && prefs.lastQuestions.length > 0 ? [...prefs.lastQuestions] : [],
     rawText: prefs.lastRawText || '',
     answerType: 'code_screenshot',
+    outputFormat: prefs.defaultOutputFormat || 'docx',
+    hwFont: prefs.defaultHwFont || 'kalam',
+    hwColor: prefs.defaultHwColor || 'blue',
+    hwPaper: prefs.defaultHwPaper || 'ruled',
     includeTerminal: true,
     language: 'auto',
     terminalStyle: prefs.defaultTerminalStyle || 'vscode',

@@ -19,7 +19,9 @@ import { solveQuestionWithAi } from './bot-ai';
 import { executeQuestionCode } from './bot-runner';
 import { generateAssignmentDocxBuffer, SolvedQuestionDocItem } from '../docx/docx-generator';
 import { generateServerAssignmentPdf } from './bot-pdf';
+import { renderServerHandwrittenPdf } from './bot-handwriting-renderer';
 import { TerminalStyle } from '../engine/server-terminal-renderer';
+import { OutputFormat } from './types';
 
 // Global singleton instance of grammY bot
 let cachedBot: Bot | null = null;
@@ -617,6 +619,28 @@ function registerBotHandlers(bot: Bot) {
       return;
     }
 
+    // Output Format Selection in Summary
+    if (data === 'fmt_docx') {
+      updateSession(chatId, { outputFormat: 'docx' });
+      saveUserPreferences(chatId, { defaultOutputFormat: 'docx' });
+      await renderSummaryCard(ctx);
+      return;
+    }
+
+    if (data === 'fmt_hw') {
+      updateSession(chatId, { outputFormat: 'hw_pdf' });
+      saveUserPreferences(chatId, { defaultOutputFormat: 'hw_pdf' });
+      await renderSummaryCard(ctx);
+      return;
+    }
+
+    if (data === 'fmt_both') {
+      updateSession(chatId, { outputFormat: 'both' });
+      saveUserPreferences(chatId, { defaultOutputFormat: 'both' });
+      await renderSummaryCard(ctx);
+      return;
+    }
+
     // Step 5: Generate
     if (data === 'generate_docx') {
       if (session.questions.length === 0) {
@@ -628,6 +652,16 @@ function registerBotHandlers(bot: Bot) {
         return;
       }
       await executeAndSendAssignment(ctx);
+      return;
+    }
+
+    if (data === 'retry_job') {
+      await executeAndSendAssignment(ctx);
+      return;
+    }
+
+    if (data === 'skip_job' || data === 'send_partial') {
+      await executeAndSendAssignment(ctx, { skipErrors: true });
       return;
     }
 
@@ -647,8 +681,55 @@ function registerBotHandlers(bot: Bot) {
       return;
     }
 
-    if (data === 'followup_handwriting') {
+    if (data === 'followup_handwriting' || data === 'hw_menu') {
+      await renderHandwritingMenu(ctx);
+      return;
+    }
+
+    if (data === 'hw_gen') {
       await sendHandwritingFollowup(ctx);
+      return;
+    }
+
+    if (data === 'hw_m_font') {
+      await renderFontSubmenu(ctx);
+      return;
+    }
+
+    if (data === 'hw_m_ink') {
+      await renderInkSubmenu(ctx);
+      return;
+    }
+
+    if (data === 'hw_m_paper') {
+      await renderPaperSubmenu(ctx);
+      return;
+    }
+
+    // Font selection callbacks
+    if (data.startsWith('hw_f_')) {
+      const selectedFont = data.replace('hw_f_', '');
+      updateSession(chatId, { hwFont: selectedFont });
+      saveUserPreferences(chatId, { defaultHwFont: selectedFont });
+      await renderHandwritingMenu(ctx);
+      return;
+    }
+
+    // Ink selection callbacks
+    if (data.startsWith('hw_c_')) {
+      const selectedInk = data.replace('hw_c_', '');
+      updateSession(chatId, { hwColor: selectedInk });
+      saveUserPreferences(chatId, { defaultHwColor: selectedInk });
+      await renderHandwritingMenu(ctx);
+      return;
+    }
+
+    // Paper selection callbacks
+    if (data.startsWith('hw_p_')) {
+      const selectedPaper = data.replace('hw_p_', '');
+      updateSession(chatId, { hwPaper: selectedPaper });
+      saveUserPreferences(chatId, { defaultHwPaper: selectedPaper });
+      await renderHandwritingMenu(ctx);
       return;
     }
 
@@ -856,10 +937,18 @@ async function renderSummaryCard(ctx: any) {
     return;
   }
 
+  const formatLabel =
+    session.outputFormat === 'hw_pdf'
+      ? '✍️ Handwritten PDF'
+      : session.outputFormat === 'both'
+      ? '📦 Both (DOCX + Handwritten PDF)'
+      : '📄 Typed Word DOCX';
+
   const card =
     `📋 **${isHindi ? 'असाइनमेंट सारांश (Assignment Summary)' : 'Assignment Submission Summary'}**\n\n` +
     `• **Questions**: ${session.questions.length} questions\n` +
     `• **Answer Type**: ${session.answerType === 'theory' ? 'Theory Only' : 'Code + Real Terminal Screenshots'}\n` +
+    `• **Output Format**: ${formatLabel}\n` +
     (session.includeTerminal
       ? `• **Language**: ${session.language.toUpperCase()}\n` +
         `• **Terminal Style**: ${session.terminalStyle.toUpperCase()}\n` +
@@ -870,13 +959,17 @@ async function renderSummaryCard(ctx: any) {
     `• **Course & Subject**: ${session.header.className} — ${session.header.subject}\n` +
     `• **Title**: ${session.header.assignmentTitle}\n\n` +
     (isHindi
-      ? `दस्तावेज़ बनाने के लिए नीचे **Generate DOCX** बटन दबाएं!`
-      : `Ready to generate! Click **Generate DOCX** below.`);
+      ? `दस्तावेज़ बनाने के लिए नीचे **Generate Submission** बटन दबाएं!`
+      : `Ready to generate! Click **Generate Submission** below.`);
 
   const keyboard = new InlineKeyboard()
-    .text(isHindi ? '🚀 दस्तावेज़ बनाएं (Generate DOCX)' : '🚀 Generate DOCX', 'generate_docx')
+    .text(isHindi ? '🚀 दस्तावेज़ बनाएं' : '🚀 Generate Submission', 'generate_docx')
     .row()
-    .text(isHindi ? '✏️ सेटिंग्स बदलें' : '✏️ Change Settings', 'change_settings')
+    .text(session.outputFormat === 'docx' ? '✅ 📄 Typed DOCX' : '📄 Typed DOCX', 'fmt_docx')
+    .text(session.outputFormat === 'hw_pdf' ? '✅ ✍️ Handwritten' : '✍️ Handwritten', 'fmt_hw')
+    .text(session.outputFormat === 'both' ? '✅ 📦 Both' : '📦 Both', 'fmt_both')
+    .row()
+    .text(isHindi ? '⚙️ सेटिंग्स' : '⚙️ Header & Options', 'confirm_questions_ok')
     .text(isHindi ? '❌ रद्द करें' : '❌ Cancel', 'action_cancel');
 
   await ctx.reply(card, { parse_mode: 'Markdown', reply_markup: keyboard });
@@ -886,9 +979,17 @@ async function renderSummaryCard(ctx: any) {
 // Document Generation & Execution Engine
 // ============================================================================
 
-async function executeAndSendAssignment(ctx: any) {
+async function executeAndSendAssignment(ctx: any, options: { skipErrors?: boolean } = {}) {
   const chatId = ctx.chat.id;
   let session = getSession(chatId);
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+  const log = (step: string, meta: Record<string, any> = {}) => {
+    const metaStr = Object.keys(meta).length ? ` | ${JSON.stringify(meta)}` : '';
+    console.log(`[${jobId}] ${step}${metaStr}`);
+  };
+
+  log('START', { chatId, questionsCount: session.questions.length });
 
   // Auto-recovery across cold serverless containers
   if (session.questions.length === 0) {
@@ -898,10 +999,12 @@ async function executeAndSendAssignment(ctx: any) {
         questions: [...prefs.lastQuestions],
         rawText: prefs.lastRawText || '',
       });
+      log('RECOVERED_QUESTIONS_FROM_PREFS', { count: session.questions.length });
     }
   }
 
   if (session.questions.length === 0) {
+    log('ABORT_NO_QUESTIONS');
     await ctx.reply(
       session.isHindi
         ? `⚠️ **कोई प्रश्न नहीं मिला!** कृपया असाइनमेंट बनाने से पहले प्रश्न भेजें। नया सत्र शुरू करने के लिए /new लिखें।`
@@ -913,6 +1016,7 @@ async function executeAndSendAssignment(ctx: any) {
   // Rate limiting check: max 5 docs per hour
   const rate = checkRateLimit(chatId);
   if (!rate.allowed) {
+    log('RATE_LIMIT_EXCEEDED');
     await ctx.reply(
       `⏳ **Rate limit reached:** You have created 5 assignments this hour. Please wait ${rate.resetMinutes} minutes before generating another.`
     );
@@ -925,129 +1029,252 @@ async function executeAndSendAssignment(ctx: any) {
     { parse_mode: 'Markdown' }
   );
 
+  const safeEditStatus = async (text: string) => {
+    try {
+      await ctx.api.editMessageText(chatId, statusMsg.message_id, text);
+    } catch {
+      // ignore edit rate throttling
+    }
+  };
+
   const totalQuestions = session.questions.length;
   const solvedItems: SolvedQuestionDocItem[] = [];
   const screenshotStore: { label: string; buffer: Buffer; dataUrl: string }[] = [];
 
-  for (let i = 0; i < totalQuestions; i++) {
-    const q = session.questions[i];
-    const qNum = i + 1;
-
-    try {
-      await ctx.api.editMessageText(
-        chatId,
-        statusMsg.message_id,
-        `⏳ **Solving Question ${qNum} of ${totalQuestions}** (${q.numberLabel})...\nExecuting code and capturing authentic screenshots...`
-      );
-    } catch {
-      // ignore edit throttling
-    }
-
-    // 1. Solve with AI or deterministic solver
-    const solvedAi = await solveQuestionWithAi(q, session.answerType, session.language);
-
-    let screenshotBuf: Buffer | null = null;
-    let screenshotDataUrl: string | undefined = undefined;
-    let outputText = '';
-    let tableData: any = undefined;
-
-    // 2. Execute code and render screenshots if enabled
-    if (session.includeTerminal && solvedAi.codeSnippet) {
-      const execResult = await executeQuestionCode(solvedAi.codeSnippet, session.language, {
-        terminalStyle: session.terminalStyle,
-        promptLocation: session.promptLocation,
-        databaseName: session.sqlDatabaseName,
-        sqlSchema: session.sqlSchema,
-        questionLabel: q.numberLabel,
-      });
-
-      screenshotBuf = execResult.outputScreenshotBuffer;
-      screenshotDataUrl = execResult.outputScreenshotDataUrl;
-      outputText = execResult.outputText;
-      tableData = execResult.tableData;
-
-      screenshotStore.push({
-        label: q.numberLabel,
-        buffer: execResult.outputScreenshotBuffer,
-        dataUrl: execResult.outputScreenshotDataUrl,
-      });
-    }
-
-    solvedItems.push({
-      id: q.id,
-      numberLabel: q.numberLabel,
-      questionText: q.text,
-      codeSnippet: solvedAi.codeSnippet,
-      codeLanguage: solvedAi.codeLanguage || session.language,
-      outputScreenshotDataUrl: screenshotDataUrl,
-      outputText,
-      tableData,
-      explanation: solvedAi.explanation,
-      timeComplexity: solvedAi.timeComplexity,
-      spaceComplexity: solvedAi.spaceComplexity,
-    });
-  }
+  // Helper with per-step timeout
+  const withTimeout = <T>(p: Promise<T>, ms: number, errorMsg: string): Promise<T> => {
+    return Promise.race([
+      p,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms)),
+    ]);
+  };
 
   try {
-    await ctx.api.editMessageText(
-      chatId,
-      statusMsg.message_id,
-      `📄 Assembling Word document (.docx) with student header, monospace code, and screenshots...`
+    for (let i = 0; i < totalQuestions; i++) {
+      const q = session.questions[i];
+      const qNum = i + 1;
+      log('SOLVE_Q_START', { qNum, label: q.numberLabel });
+
+      await safeEditStatus(
+        `⏳ **Solving Question ${qNum} of ${totalQuestions}** (${q.numberLabel})...\nAnalyzing and drafting exam-ready solution...`
+      );
+
+      let solvedAi: any;
+      try {
+        solvedAi = await withTimeout(
+          solveQuestionWithAi(q, session.answerType, session.language),
+          60000,
+          `Timeout solving question ${q.numberLabel}`
+        );
+      } catch (err: any) {
+        log('SOLVE_Q_ERROR', { qNum, error: err.message });
+        if (!options.skipErrors) {
+          const errKeyboard = new InlineKeyboard()
+            .text('🔁 Retry Question', 'retry_job')
+            .text('⏭️ Skip Question', 'skip_job')
+            .row()
+            .text('📄 Deliver Partial Document', 'send_partial');
+
+          await ctx.reply(
+            `⚠️ **Error while solving Question ${qNum} (${q.numberLabel}):**\n${err.message}\n\nPlease choose an action:`,
+            { reply_markup: errKeyboard }
+          );
+          return;
+        }
+        solvedAi = {
+          codeSnippet: undefined,
+          explanation: `Solution for ${q.numberLabel} could not be completed within the time limit.`,
+        };
+      }
+
+      let screenshotBuf: Buffer | null = null;
+      let screenshotDataUrl: string | undefined = undefined;
+      let outputText = '';
+      let tableData: any = undefined;
+
+      // 2. Execute code and render screenshots if enabled
+      if (session.includeTerminal && solvedAi.codeSnippet) {
+        log('CODE_EXEC_START', { qNum, lang: session.language });
+        await safeEditStatus(
+          `💻 **Running code for Question ${qNum} of ${totalQuestions}** (${q.numberLabel})...\nExecuting in-engine and capturing authentic screenshots...`
+        );
+
+        try {
+          const execResult = await withTimeout(
+            executeQuestionCode(solvedAi.codeSnippet, session.language, {
+              terminalStyle: session.terminalStyle,
+              promptLocation: session.promptLocation,
+              databaseName: session.sqlDatabaseName,
+              sqlSchema: session.sqlSchema,
+              questionLabel: q.numberLabel,
+            }),
+            30000,
+            `Timeout executing code for ${q.numberLabel}`
+          );
+
+          screenshotBuf = execResult.outputScreenshotBuffer;
+          screenshotDataUrl = execResult.outputScreenshotDataUrl;
+          outputText = execResult.outputText;
+          tableData = execResult.tableData;
+
+          if (execResult.outputScreenshotBuffer) {
+            log('SCREENSHOT_MADE', {
+              qNum,
+              bytes: execResult.outputScreenshotBuffer.length,
+            });
+            screenshotStore.push({
+              label: q.numberLabel,
+              buffer: execResult.outputScreenshotBuffer,
+              dataUrl: execResult.outputScreenshotDataUrl,
+            });
+          }
+        } catch (execErr: any) {
+          log('CODE_EXEC_ERROR', { qNum, error: execErr.message });
+          outputText = `Code execution note: ${execErr.message}`;
+        }
+      }
+
+      solvedItems.push({
+        id: q.id,
+        numberLabel: q.numberLabel,
+        questionText: q.text,
+        codeSnippet: solvedAi.codeSnippet,
+        codeLanguage: solvedAi.codeLanguage || session.language,
+        outputScreenshotDataUrl: screenshotDataUrl,
+        outputText,
+        tableData,
+        explanation: solvedAi.explanation,
+        timeComplexity: solvedAi.timeComplexity,
+        spaceComplexity: solvedAi.spaceComplexity,
+      });
+
+      log('SOLVE_Q_SUCCESS', { qNum });
+    }
+
+    // 3. Assemble Full DOCX Buffer
+    log('DOCX_BUILD_START');
+    await safeEditStatus(
+      `📄 **Assembling Word document (.docx)** with student header, monospace code, and screenshots...`
     );
-  } catch {}
 
-  // 3. Generate DOCX Buffer
-  const docxBuffer = await generateAssignmentDocxBuffer({
-    header: session.header,
-    questions: solvedItems,
-    fontFamily: 'Times New Roman',
-    includeExplanations: true,
-  });
+    let docxBuffer: Buffer | null = null;
+    try {
+      docxBuffer = await generateAssignmentDocxBuffer({
+        header: session.header,
+        questions: solvedItems,
+        fontFamily: 'Times New Roman',
+        includeExplanations: true,
+      });
+      log('DOCX_BUILT', { bytes: docxBuffer.length });
+    } catch (docxErr: any) {
+      log('DOCX_BUILD_FAILED', { error: docxErr.message });
+      console.error('generateAssignmentDocxBuffer error:', docxErr);
+    }
 
-  // 4. Generate companion PDF Buffer
-  const pdfBuffer = await generateServerAssignmentPdf({
-    header: session.header,
-    questions: solvedItems,
-    screenshots: screenshotStore,
-  });
+    // 4. Safe Telegram Document Delivery with Retry
+    const isHindi = session.isHindi;
+    const followUpKeyboard = new InlineKeyboard()
+      .text(isHindi ? '✍️ हस्तलिखित (Handwritten) PDF' : '✍️ Handwritten PDF', 'followup_handwriting')
+      .text(isHindi ? '📄 PDF वर्शन भेजें' : '📄 Send PDF too', 'followup_pdf')
+      .row()
+      .text(isHindi ? '🖼️ स्क्रीनशॉट्स फोटो' : '🖼️ Screenshots as images', 'followup_images')
+      .text(isHindi ? '📝 नया असाइनमेंट' : '✨ New Assignment', 'action_new');
 
-  // Store buffers in session for follow-ups
-  updateSession(chatId, {
-    currentStep: 'completed',
-    generatedDocxBuffer: docxBuffer,
-    generatedPdfBuffer: pdfBuffer,
-    screenshots: screenshotStore,
-  });
-  incrementRateLimit(chatId);
+    const sendDocWithRetry = async (
+      buffer: Buffer,
+      filename: string,
+      captionText: string,
+      markup: InlineKeyboard
+    ) => {
+      log('SEND_DOC_CALL', { filename, bytes: buffer.length });
+      try {
+        await ctx.replyWithDocument(new InputFile(buffer, filename), {
+          caption: captionText,
+          parse_mode: 'Markdown',
+          reply_markup: markup,
+        });
+        log('SEND_DOC_RESULT', { status: 'success', filename });
+      } catch (sendErr: any) {
+        log('SEND_DOC_FIRST_TRY_FAILED', { error: sendErr.message });
+        const waitTime = sendErr?.parameters?.retry_after ? sendErr.parameters.retry_after * 1000 : 1500;
+        await new Promise((r) => setTimeout(r, waitTime));
+        // Retry once
+        try {
+          await ctx.replyWithDocument(new InputFile(buffer, filename), {
+            caption: captionText,
+            parse_mode: 'Markdown',
+            reply_markup: markup,
+          });
+          log('SEND_DOC_RESULT', { status: 'success_retry', filename });
+        } catch (retryErr: any) {
+          log('SEND_DOC_RESULT', { status: 'fatal_failure', error: retryErr.message });
+          throw retryErr;
+        }
+      }
+    };
 
-  // 5. Send DOCX file
-  const isHindi = session.isHindi;
-  const caption = isHindi
-    ? `✅ **आपका असाइनमेंट तैयार है!**\n\n` +
-      `📄 **फाइल**: \`${session.filename}\`\n` +
-      `• छात्र: ${session.header.studentName} (${session.header.rollNo})\n` +
-      `• विषय: ${session.header.subject}\n` +
-      `• A4 फॉर्मेट, 1-इंच मार्जिन, रियल टर्मिनल स्क्रीनशॉट्स`
-    : `✅ **Your Assignment Document is ready!**\n\n` +
-      `📄 **File**: \`${session.filename}\`\n` +
-      `• Student: ${session.header.studentName} (${session.header.rollNo})\n` +
-      `• Subject: ${session.header.subject}\n` +
-      `• A4 Layout, 1-inch margins, Consolas code blocks, authentic terminal screenshots.`;
+    if (docxBuffer) {
+      const caption = isHindi
+        ? `✅ **आपका असाइनमेंट तैयार है!**\n\n` +
+          `📄 **फाइल**: \`${session.filename}\`\n` +
+          `• छात्र: ${session.header.studentName} (${session.header.rollNo})\n` +
+          `• विषय: ${session.header.subject}\n` +
+          `• A4 फॉर्मेट, 1-इंच मार्जिन, रियल टर्मिनल स्क्रीनशॉट्स`
+        : `✅ **Your Assignment Document is ready!**\n\n` +
+          `📄 **File**: \`${session.filename}\`\n` +
+          `• Student: ${session.header.studentName} (${session.header.rollNo})\n` +
+          `• Subject: ${session.header.subject}\n` +
+          `• A4 Layout, 1-inch margins, Consolas code blocks, authentic terminal screenshots.`;
 
-  const followUpKeyboard = new InlineKeyboard()
-    .text(isHindi ? '📄 PDF वर्शन भेजें' : '📄 Also Send PDF', 'followup_pdf')
-    .row()
-    .text(isHindi ? '🖼️ स्क्रीनशॉट्स फोटो के रूप में' : '🖼️ Send Screenshots as Images', 'followup_images')
-    .row()
-    .text(isHindi ? '✍️ हस्तलिखित (Handwritten) PDF' : '✍️ Handwritten Version (PDF)', 'followup_handwriting')
-    .row()
-    .text(isHindi ? '🔄 टर्मिनल लोकेशन बदलें' : '🔄 Change Terminal Location', 'followup_change_prompt');
+      await sendDocWithRetry(docxBuffer, session.filename, caption, followUpKeyboard);
+    } else {
+      // DOCX build failed; fallback to PDF
+      await safeEditStatus(`⚠️ Word (.docx) generation encountered an issue; assembling PDF document instead...`);
+      const fallbackPdf = await generateServerAssignmentPdf({
+        header: session.header,
+        questions: solvedItems,
+        screenshots: screenshotStore,
+      });
+      const pdfFilename = session.filename.replace(/\.docx$/i, '.pdf');
+      await sendDocWithRetry(
+        fallbackPdf,
+        pdfFilename,
+        `📄 **Assignment PDF Submission** (DOCX fallback)\n• Student: ${session.header.studentName}`,
+        followUpKeyboard
+      );
+    }
 
-  await ctx.replyWithDocument(new InputFile(docxBuffer, session.filename), {
-    caption,
-    parse_mode: 'Markdown',
-    reply_markup: followUpKeyboard,
-  });
+    // Store in session for on-demand follow-ups
+    updateSession(chatId, {
+      currentStep: 'completed',
+      generatedDocxBuffer: docxBuffer || undefined,
+      screenshots: screenshotStore,
+    });
+    incrementRateLimit(chatId);
+
+    // If user requested Handwritten PDF or Both in summary:
+    if (session.outputFormat === 'hw_pdf' || session.outputFormat === 'both') {
+      await sendHandwritingFollowup(ctx);
+    }
+
+    // Clean up status message
+    try {
+      await ctx.api.deleteMessage(chatId, statusMsg.message_id);
+    } catch {}
+  } catch (fatalErr: any) {
+    log('FATAL_PIPELINE_ERROR', { error: fatalErr.message });
+    console.error('Fatal assignment generation error:', fatalErr);
+
+    const retryKeyboard = new InlineKeyboard()
+      .text('🔁 Retry Full Generation', 'retry_job')
+      .row()
+      .text('✨ Start Over (/new)', 'action_new');
+
+    await ctx.reply(
+      `❌ **Assignment Generation Failed:**\n${fatalErr.message || 'An unexpected error occurred.'}\n\nPlease tap Retry below to try again:`,
+      { reply_markup: retryKeyboard }
+    );
+  }
 }
 
 // ============================================================================
@@ -1055,13 +1282,34 @@ async function executeAndSendAssignment(ctx: any) {
 // ============================================================================
 
 async function sendPdfFollowup(ctx: any) {
-  const session = getSession(ctx.chat.id);
-  if (!session.generatedPdfBuffer) {
-    await ctx.reply('⚠️ PDF not available. Please generate the assignment first.');
-    return;
+  const chatId = ctx.chat.id;
+  const session = getSession(chatId);
+
+  let pdfBuffer = session.generatedPdfBuffer;
+  if (!pdfBuffer) {
+    await ctx.reply('⏳ Generating PDF document...');
+    try {
+      pdfBuffer = await generateServerAssignmentPdf({
+        header: session.header,
+        questions: session.questions.map((q) => ({
+          id: q.id,
+          numberLabel: q.numberLabel,
+          questionText: q.text,
+          codeSnippet: q.codeSnippet,
+          codeLanguage: q.codeLanguage || session.language,
+          explanation: q.explanation,
+        })),
+        screenshots: session.screenshots,
+      });
+      updateSession(chatId, { generatedPdfBuffer: pdfBuffer });
+    } catch (err: any) {
+      await ctx.reply(`⚠️ Could not generate PDF: ${err.message}`);
+      return;
+    }
   }
+
   const pdfFilename = session.filename.replace(/\.docx$/i, '.pdf');
-  await ctx.replyWithDocument(new InputFile(session.generatedPdfBuffer, pdfFilename), {
+  await ctx.replyWithDocument(new InputFile(pdfBuffer, pdfFilename), {
     caption: `📄 **Assignment PDF Submission** (${pdfFilename})`,
     parse_mode: 'Markdown',
   });
@@ -1083,29 +1331,151 @@ async function sendScreenshotsFollowup(ctx: any) {
   }
 }
 
+async function renderHandwritingMenu(ctx: any) {
+  const chatId = ctx.chat.id;
+  const session = getSession(chatId);
+
+  const fontNameMap: Record<string, string> = {
+    kalam: 'Kalam (Neat Indian)',
+    'patrick-hand': 'Patrick Hand (Classroom)',
+    caveat: 'Caveat (Fluid Cursive)',
+    'shadows-into-light': 'Shadows Into Light (Delicate)',
+  };
+
+  const inkNameMap: Record<string, string> = {
+    blue: 'Royal Blue (#1A3673)',
+    black: 'Jet Black (#1F2421)',
+    red: 'Crimson Red (#9B1D20)',
+    green: 'Emerald Green (#1E5E3A)',
+  };
+
+  const paperNameMap: Record<string, string> = {
+    ruled: 'Ruled Medium (Standard)',
+    margin: 'Ruled with Red Margin',
+    plain: 'Plain Off-White Sheet',
+  };
+
+  const text =
+    `✍️ **Handwritten Submission Studio**\n\n` +
+    `Render your assignment with organic handwriting physics on realistic notebook paper:\n\n` +
+    `• **Font**: ${fontNameMap[session.hwFont] || session.hwFont}\n` +
+    `• **Ink Color**: ${inkNameMap[session.hwColor] || session.hwColor}\n` +
+    `• **Paper Style**: ${paperNameMap[session.hwPaper] || session.hwPaper}\n\n` +
+    `Tap **Generate Handwritten PDF** below when ready, or customize styles:`;
+
+  const keyboard = new InlineKeyboard()
+    .text('🚀 Generate Handwritten PDF', 'hw_gen')
+    .row()
+    .text(`🔤 Font: ${session.hwFont.toUpperCase()}`, 'hw_m_font')
+    .text(`🎨 Ink: ${session.hwColor.toUpperCase()}`, 'hw_m_ink')
+    .row()
+    .text(`📜 Paper: ${session.hwPaper.toUpperCase()}`, 'hw_m_paper')
+    .text('📄 Send Typed DOCX', 'generate_docx');
+
+  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+}
+
+async function renderFontSubmenu(ctx: any) {
+  const keyboard = new InlineKeyboard()
+    .text('Kalam (Neat Hindi/English)', 'hw_f_kalam')
+    .row()
+    .text('Patrick Hand (Classroom)', 'hw_f_patrick-hand')
+    .row()
+    .text('Caveat (Organic Cursive)', 'hw_f_caveat')
+    .row()
+    .text('Shadows Into Light', 'hw_f_shadows-into-light')
+    .row()
+    .text('⬅️ Back to Handwriting Menu', 'hw_menu');
+
+  await ctx.reply('🔤 **Choose Handwriting Font Style:**', { reply_markup: keyboard });
+}
+
+async function renderInkSubmenu(ctx: any) {
+  const keyboard = new InlineKeyboard()
+    .text('🔵 Royal Blue Gel Pen', 'hw_c_blue')
+    .text('⚫ Jet Black Ballpoint', 'hw_c_black')
+    .row()
+    .text('🔴 Crimson Red Pen', 'hw_c_red')
+    .text('🟢 Emerald Green Pen', 'hw_c_green')
+    .row()
+    .text('⬅️ Back to Handwriting Menu', 'hw_menu');
+
+  await ctx.reply('🎨 **Choose Ink Color:**', { reply_markup: keyboard });
+}
+
+async function renderPaperSubmenu(ctx: any) {
+  const keyboard = new InlineKeyboard()
+    .text('📏 Ruled Medium Lines', 'hw_p_ruled')
+    .row()
+    .text('📑 Ruled with Red Margin Line', 'hw_p_margin')
+    .row()
+    .text('📄 Plain Off-White Paper', 'hw_p_plain')
+    .row()
+    .text('⬅️ Back to Handwriting Menu', 'hw_menu');
+
+  await ctx.reply('📜 **Choose Paper Ruling & Background:**', { reply_markup: keyboard });
+}
+
 async function sendHandwritingFollowup(ctx: any) {
-  const session = getSession(ctx.chat.id);
-  await ctx.reply('✍️ Rendering realistic handwritten PDF with ruled notebook paper and ink styling...');
+  const chatId = ctx.chat.id;
+  const session = getSession(chatId);
 
-  const handwrittenPdfBuffer = await generateServerAssignmentPdf({
-    header: session.header,
-    questions: session.questions.map((q) => ({
-      id: q.id,
-      numberLabel: q.numberLabel,
-      questionText: q.text,
-      codeSnippet: q.codeSnippet,
-      codeLanguage: q.codeLanguage || session.language,
-      explanation: q.explanation,
-    })),
-    screenshots: session.screenshots,
-    isHandwritten: true,
-  });
+  if (session.questions.length === 0) {
+    await ctx.reply('⚠️ No questions found. Start fresh with /new.');
+    return;
+  }
 
-  const hwFilename = session.filename.replace(/\.docx$/i, '_Handwritten.pdf');
-  await ctx.replyWithDocument(new InputFile(handwrittenPdfBuffer, hwFilename), {
-    caption: `✍️ **Handwritten Assignment Submission** (${hwFilename})\nRendered with ruled notebook paper & deterministic handwriting styling.`,
-    parse_mode: 'Markdown',
-  });
+  await ctx.reply(
+    `✍️ **Rendering Realistic Handwritten PDF** (150 DPI, Font: \`${session.hwFont}\`, Ink: \`${session.hwColor}\`, Paper: \`${session.hwPaper}\`)...`
+  );
+
+  try {
+    const hwPdfBuffer = await renderServerHandwrittenPdf({
+      header: session.header,
+      questions: session.questions.map((q) => ({
+        id: q.id,
+        numberLabel: q.numberLabel,
+        questionText: q.text,
+        codeSnippet: q.codeSnippet,
+        codeLanguage: q.codeLanguage || session.language,
+        explanation: q.explanation,
+        outputScreenshotDataUrl: q.outputScreenshotDataUrl,
+      })),
+      screenshots: session.screenshots,
+      font: session.hwFont,
+      inkColor: session.hwColor,
+      paperStyle: session.hwPaper,
+    });
+
+    const hwFilename = session.filename.replace(/\.docx$/i, '_Handwritten.pdf');
+
+    const hwFollowupKeyboard = new InlineKeyboard()
+      .text('🎨 Change Handwriting Style', 'hw_menu')
+      .row()
+      .text('📄 Send Typed DOCX', 'generate_docx')
+      .text('✨ New Assignment', 'action_new');
+
+    await ctx.replyWithDocument(new InputFile(hwPdfBuffer, hwFilename), {
+      caption:
+        `✍️ **Handwritten Assignment Submission** (\`${hwFilename}\`)\n` +
+        `• Font: ${session.hwFont}  |  Ink: ${session.hwColor}  |  Paper: ${session.hwPaper}\n` +
+        `• Student: ${session.header.studentName} (${session.header.rollNo})\n` +
+        `• A4 150 DPI with paper ruling & handwriting physics.`,
+      parse_mode: 'Markdown',
+      reply_markup: hwFollowupKeyboard,
+    });
+  } catch (hwErr: any) {
+    console.error('Handwriting rendering exception:', hwErr);
+    const failKeyboard = new InlineKeyboard()
+      .text('📄 Send Typed DOCX Instead', 'generate_docx')
+      .row()
+      .text('✨ Start Over (/new)', 'action_new');
+
+    await ctx.reply(
+      `⚠️ **Handwritten engine encountered an issue:** ${hwErr.message}\n\nYou can still download your typed DOCX submission:`,
+      { reply_markup: failKeyboard }
+    );
+  }
 }
 
 // ============================================================================
@@ -1115,18 +1485,33 @@ async function sendHandwritingFollowup(ctx: any) {
 async function renderSettingsView(ctx: any) {
   const chatId = ctx.chat.id;
   const prefs = getUserPreferences(chatId);
+  const session = getSession(chatId);
 
   const text =
     `⚙️ **Saved Student Settings & Preferences**\n\n` +
-    `• **Name**: ${prefs.name || 'Not set (Default: Ajeet Kumar)'}\n` +
-    `• **Roll No**: ${prefs.rollNo || 'Not set (Default: 22BCS1045)'}\n` +
-    `• **Course**: ${prefs.course || 'Not set (Default: B.Tech CSE)'}\n` +
-    `• **Subject**: ${prefs.subject || 'Not set (Default: DBMS)'}\n` +
+    `• **Name**: ${prefs.name || 'Ajeet kumar'}\n` +
+    `• **Roll No**: ${prefs.rollNo || '255ISC014'}\n` +
+    `• **Course**: ${prefs.course || 'int btech cse'}\n` +
+    `• **Subject**: ${prefs.subject || 'Computer Organization and Architecture'}\n` +
+    `• **Assignment Title**: ${prefs.assignmentTitle || 'COA ASSIGNMENT 2'}\n` +
     `• **Terminal Style**: ${(prefs.defaultTerminalStyle || 'vscode').toUpperCase()}\n` +
-    `• **Default Prompt**: \`${prefs.defaultPromptLocation || 'PS D:\\ajeet\\program\\DBMS>'}\`\n\n` +
+    `• **Default Prompt**: \`${prefs.defaultPromptLocation || 'PS D:\\ajeet\\program\\DBMS>'}\`\n` +
+    `• **Default Output**: ${
+      session.outputFormat === 'hw_pdf'
+        ? 'Handwritten PDF'
+        : session.outputFormat === 'both'
+        ? 'Both (DOCX + PDF)'
+        : 'Typed DOCX'
+    }\n` +
+    `• **Handwriting Font**: ${session.hwFont.toUpperCase()}\n` +
+    `• **Ink Color**: ${session.hwColor.toUpperCase()}\n` +
+    `• **Paper Style**: ${session.hwPaper.toUpperCase()}\n\n` +
     `_These settings are saved for your chat ID and automatically pre-filled in your assignments._`;
 
-  const keyboard = new InlineKeyboard().text('✨ Start New Assignment (/new)', 'action_new');
+  const keyboard = new InlineKeyboard()
+    .text('✨ Start New Assignment (/new)', 'action_new')
+    .row()
+    .text('✍️ Configure Handwriting Options', 'hw_menu');
 
   await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

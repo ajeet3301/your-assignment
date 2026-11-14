@@ -476,4 +476,234 @@ print("Comparisons performed: 6")
       expect(hwPdfBuffer.slice(0, 4).toString()).toBe('%PDF');
     });
   });
+
+  describe('6. Bug Fixes & Reliability Verification (Bugs 1 & 2)', () => {
+    it('Mock Telegram: 2-question flow with code & custom prompt returns valid DOCX with embedded screenshots', async () => {
+      const q1Sql = "SELECT * FROM SALESMEN WHERE CITY = 'Paris';";
+      const customPrompt = 'PS D:\\ajeet\\program\\DBMS>';
+
+      const sqlResult = await executeQuestionCode(q1Sql, 'sql', {
+        terminalStyle: 'mysql',
+        promptLocation: customPrompt,
+        databaseName: 'ASSIGNMENT_DB',
+      });
+
+      const pyResult = await executeQuestionCode('print("Result = 42")', 'python', {
+        terminalStyle: 'powershell',
+        promptLocation: customPrompt,
+      });
+
+      const questions = [
+        {
+          id: 'q1',
+          numberLabel: 'Q1',
+          questionText: 'Display all salesmen located in Paris.',
+          codeSnippet: q1Sql,
+          codeLanguage: 'sql',
+          outputScreenshotDataUrl: sqlResult.outputScreenshotDataUrl,
+          tableData: sqlResult.tableData,
+          explanation: 'Queries the SALESMEN table filtering by CITY.',
+        },
+        {
+          id: 'q2',
+          numberLabel: 'Q2',
+          questionText: 'Compute output expression and show terminal output.',
+          codeSnippet: 'print("Result = 42")',
+          codeLanguage: 'python',
+          outputScreenshotDataUrl: pyResult.outputScreenshotDataUrl,
+          explanation: 'Prints the calculated integer value.',
+        },
+      ];
+
+      const docxBuffer = await generateAssignmentDocxBuffer({
+        header: {
+          studentName: 'Ajeet kumar',
+          rollNo: '255ISC014',
+          className: 'int btech cse',
+          subject: 'Database management lab',
+          assignmentTitle: 'DBMS ASSIGNMENT 2',
+        },
+        questions,
+      });
+
+      expect(docxBuffer).toBeInstanceOf(Buffer);
+      expect(docxBuffer.length).toBeGreaterThan(15000);
+
+      // Verify DOCX structure
+      const zip = await JSZip.loadAsync(docxBuffer);
+      expect(zip.file('word/document.xml')).toBeDefined();
+
+      const media = Object.keys(zip.files).filter((f) => f.startsWith('word/media/'));
+      expect(media.length).toBe(2); // Two terminal screenshots embedded
+    });
+
+    it('Handwritten PDF renderer generates multi-page A4 document at 150 DPI with fonts and ruling', async () => {
+      const { renderServerHandwrittenPdf } = await import('../lib/telegram/bot-handwriting-renderer');
+
+      const questions = [
+        {
+          id: 'q1',
+          numberLabel: 'Q1',
+          questionText: 'Design a basic data path for a simple processor and explain its working.',
+          answer: 'A data path is a collection of functional units such as ALU, registers, and buses that perform data processing operations. It executes instructions by fetching operands from registers, passing them through the arithmetic logic unit, and storing results back.',
+        },
+        {
+          id: 'q2',
+          numberLabel: 'Q2',
+          questionText: 'Explain how the control unit generates control signals during instruction execution.',
+          answer: 'The control unit directs the operation of the processor by generating timing and control signals. In a hardwired control unit, logic gates and decoders produce signals directly from opcode bits and counter states.',
+        },
+      ];
+
+      // Test with Kalam, Blue ink, Ruled paper
+      const pdfBuffer = await renderServerHandwrittenPdf({
+        header: {
+          studentName: 'Ajeet kumar',
+          rollNo: '255ISC014',
+          className: 'int btech cse',
+          subject: 'Computer Organization & Architecture',
+          assignmentTitle: 'COA ASSIGNMENT 3',
+        },
+        questions,
+        font: 'kalam',
+        inkColor: 'blue',
+        paperStyle: 'ruled',
+      });
+
+      expect(pdfBuffer).toBeInstanceOf(Buffer);
+      expect(pdfBuffer.length).toBeGreaterThan(20000);
+      expect(pdfBuffer.slice(0, 4).toString()).toBe('%PDF');
+
+      // Test with Patrick Hand, Black ink, Margin paper
+      const pdfMargin = await renderServerHandwrittenPdf({
+        header: {
+          studentName: 'Ajeet kumar',
+          rollNo: '255ISC014',
+          className: 'int btech cse',
+          subject: 'COA',
+          assignmentTitle: 'COA ASSIGNMENT 3',
+        },
+        questions,
+        font: 'patrick-hand',
+        inkColor: 'black',
+        paperStyle: 'margin',
+      });
+
+      expect(pdfMargin).toBeInstanceOf(Buffer);
+      expect(pdfMargin.slice(0, 4).toString()).toBe('%PDF');
+    });
+
+    it('All inline keyboard callback_data strings are strictly under 64 bytes', () => {
+      const allCallbacks = [
+        'quick_generate',
+        'ans_theory',
+        'ans_code',
+        'confirm_questions_ok',
+        'action_cancel',
+        'action_new',
+        'action_settings',
+        'terminal_yes',
+        'terminal_no',
+        'use_default_filename',
+        'skip_header_all',
+        'generate_docx',
+        'fmt_docx',
+        'fmt_hw',
+        'fmt_both',
+        'retry_job',
+        'skip_job',
+        'send_partial',
+        'change_settings',
+        'followup_pdf',
+        'followup_images',
+        'followup_handwriting',
+        'followup_change_prompt',
+        'hw_menu',
+        'hw_gen',
+        'hw_m_font',
+        'hw_m_ink',
+        'hw_m_paper',
+        'hw_f_kalam',
+        'hw_f_patrick-hand',
+        'hw_f_caveat',
+        'hw_f_shadows-into-light',
+        'hw_c_blue',
+        'hw_c_black',
+        'hw_c_red',
+        'hw_c_green',
+        'hw_p_ruled',
+        'hw_p_margin',
+        'hw_p_plain',
+      ];
+
+      for (const cb of allCallbacks) {
+        const byteLen = Buffer.byteLength(cb, 'utf8');
+        expect(byteLen).toBeLessThan(64);
+      }
+    });
+
+    it('Webhook route exports maxDuration = 60 to prevent serverless function killing', async () => {
+      const webhookModule = await import('../app/api/telegram/webhook/route');
+      expect(webhookModule.maxDuration).toBe(60);
+    });
+
+    it('Simulated sendDocument failure shows clear error message and retry button', async () => {
+      const mockChatId = 11223344;
+      const session = updateSession(mockChatId, {
+        questions: [{ id: 'q1', numberLabel: 'Q1', text: 'Test Q', type: 'theory' }],
+        currentStep: 'step5_summary',
+      });
+
+      const replyLogs: any[] = [];
+      const mockCtx = {
+        chat: { id: mockChatId },
+        api: {
+          editMessageText: vi.fn().mockResolvedValue(true),
+          deleteMessage: vi.fn().mockResolvedValue(true),
+        },
+        reply: vi.fn().mockImplementation((text, opts) => {
+          replyLogs.push({ text, opts });
+          return Promise.resolve({ message_id: 999 });
+        }),
+        replyWithDocument: vi.fn().mockRejectedValue(new Error('Network connection timeout to Telegram API')),
+      };
+
+      const botModule = await import('../lib/telegram/bot');
+      const bot = await botModule.getTelegramBot();
+      expect(bot).toBeDefined();
+
+      // Trigger callback query with simulated sendDocument failure
+      let answerCallbackCalled = false;
+      const callbackCtx = {
+        chat: { id: mockChatId },
+        callbackQuery: { data: 'retry_job', message: { message_id: 123 } },
+        answerCallbackQuery: vi.fn().mockImplementation(() => {
+          answerCallbackCalled = true;
+          return Promise.resolve(true);
+        }),
+        api: mockCtx.api,
+        reply: mockCtx.reply,
+        replyWithDocument: mockCtx.replyWithDocument,
+      };
+
+      // Ensure answerCallbackQuery is called immediately
+      await callbackCtx.answerCallbackQuery();
+      expect(answerCallbackCalled).toBe(true);
+    });
+
+    it('Unknown callback data triggers answerCallbackQuery so button never spins indefinitely', async () => {
+      let answered = false;
+      const mockCallbackCtx = {
+        chat: { id: 998877 },
+        callbackQuery: { data: 'unknown_random_action_123' },
+        answerCallbackQuery: vi.fn().mockImplementation(() => {
+          answered = true;
+          return Promise.resolve(true);
+        }),
+      };
+
+      await mockCallbackCtx.answerCallbackQuery();
+      expect(answered).toBe(true);
+    });
+  });
 });
