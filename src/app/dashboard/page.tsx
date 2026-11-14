@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   PenTool,
@@ -10,61 +10,40 @@ import {
   Search,
   FileText,
   Clock,
-  MoreVertical,
   Trash2,
   Copy,
-  ExternalLink,
+  Download,
+  Upload,
   Coins,
-  CheckCircle2,
   BookOpen,
   ArrowRight,
-  Filter,
+  HardDrive,
+  Settings,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEditorStore } from '@/lib/store/editor-store';
-
-interface MockProject {
-  id: string;
-  title: string;
-  type: 'handwriting' | 'solver';
-  updatedAt: string;
-  pages: number;
-  previewText: string;
-}
-
-const INITIAL_PROJECTS: MockProject[] = [
-  {
-    id: 'proj-1',
-    title: 'Physics & Quantum Computing',
-    type: 'handwriting',
-    updatedAt: '10 mins ago',
-    pages: 2,
-    previewText: 'Explain the principle of quantum superposition and how a qubit differs...',
-  },
-  {
-    id: 'proj-2',
-    title: 'Computer Networks TCP Assignment',
-    type: 'handwriting',
-    updatedAt: '2 hours ago',
-    pages: 3,
-    previewText: 'The three-way handshake mechanism in TCP and SYN flood defense...',
-  },
-  {
-    id: 'proj-3',
-    title: 'Calculus III Differential Equations',
-    type: 'solver',
-    updatedAt: 'Yesterday',
-    pages: 4,
-    previewText: 'Find the general solution to the second-order non-homogeneous ODE...',
-  },
-];
+import { localAdapter } from '@/lib/storage/local-adapter';
+import { StoredProject } from '@/lib/storage/adapter';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { setContent, setTitle } = useEditorStore();
-  const [projects, setProjects] = useState<MockProject[]>(INITIAL_PROJECTS);
+  const { setContent, setTitle, updateSettings } = useEditorStore();
+  const [projects, setProjects] = useState<StoredProject[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'handwriting' | 'solver'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load projects from IndexedDB
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    setIsLoading(true);
+    const items = await localAdapter.getProjects();
+    setProjects(items);
+    setIsLoading(false);
+  };
 
   const filteredProjects = projects.filter((p) => {
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -72,32 +51,92 @@ export default function DashboardPage() {
     return matchesSearch && matchesFilter;
   });
 
-  const handleCreateNew = () => {
-    setTitle('Untitled Handwritten Assignment');
-    setContent('# New Assignment\n\nStart typing your questions and answers here...');
+  const handleCreateNew = async () => {
+    const newTitle = 'Untitled Handwritten Assignment';
+    const newDoc = {
+      content: '# New Assignment\n\nStart typing your questions and answers here...',
+      settings: useEditorStore.getState().settings,
+    };
+
+    const newProject: StoredProject = {
+      id: `proj-${Date.now()}`,
+      title: newTitle,
+      type: 'handwriting',
+      document: newDoc,
+      previewText: 'Start typing your questions and answers here...',
+      pagesCount: 1,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    await localAdapter.saveProject(newProject);
+    setTitle(newTitle);
+    setContent(newDoc.content);
     router.push('/editor');
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Move project to trash?')) {
-      setProjects(projects.filter((p) => p.id !== id));
+    if (confirm('Delete this project from your device?')) {
+      await localAdapter.deleteProject(id);
+      await loadProjects();
     }
   };
 
-  const handleDuplicate = (project: MockProject, e: React.MouseEvent) => {
+  const handleDuplicate = async (project: StoredProject, e: React.MouseEvent) => {
     e.stopPropagation();
-    const copy: MockProject = {
+    const copy: StoredProject = {
       ...project,
       id: `proj-${Date.now()}`,
       title: `${project.title} (Copy)`,
-      updatedAt: 'Just now',
+      updatedAt: new Date().toISOString(),
     };
-    setProjects([copy, ...projects]);
+    await localAdapter.saveProject(copy);
+    await loadProjects();
+  };
+
+  const handleOpenProject = (project: StoredProject) => {
+    setTitle(project.title);
+    setContent(project.document.content);
+    if (project.document.settings) {
+      updateSettings(project.document.settings);
+    }
+    router.push('/editor');
+  };
+
+  const handleExportJson = async () => {
+    const jsonStr = await localAdapter.exportProjectsJson();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `yourassignment-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const count = await localAdapter.importProjectsJson(text);
+        alert(`Successfully imported ${count} project(s) to IndexedDB!`);
+        await loadProjects();
+      } catch {
+        alert('Invalid JSON backup file');
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FBF7EE] text-[#14213D]">
+    <div className="min-h-screen flex flex-col bg-[#FBF7EE] text-[#14213D] select-none">
       {/* Dashboard Top Header */}
       <header className="h-16 bg-white border-b border-[#E2D8C3] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-3">
@@ -110,37 +149,79 @@ export default function DashboardPage() {
             </span>
           </Link>
           <span className="text-[#D5C9B0]">/</span>
-          <span className="text-sm font-semibold text-[#6B7280]">Student Dashboard</span>
+          <span className="text-sm font-semibold text-[#6B7280]">Workspace</span>
         </div>
 
-        {/* Right side: Credits and Profile */}
-        <div className="flex items-center gap-4">
-          {/* Plan & Credits Balance Badge */}
+        {/* Right side: Zero-Config / Guest Mode */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/setup"
+            className="p-1.5 text-[#6B7280] hover:text-[#1F3A8A] hover:bg-[#F4EEDC] rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+            title="System Capabilities"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:inline">Capabilities</span>
+          </Link>
+
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FAF8F5] border border-[#E2D8C3] rounded-xl text-xs">
             <Coins className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-bold text-[#14213D]">48 / 50</span>
-            <span className="text-[#6B7280] hidden sm:inline">Credits Remaining</span>
-            <span className="text-[10px] font-bold bg-[#1F3A8A] text-white px-1.5 py-0.5 rounded-full ml-1">
-              FREE
+            <span className="font-bold text-[#14213D]">Unlimited</span>
+            <span className="text-[10px] font-bold bg-emerald-700 text-white px-2 py-0.5 rounded-full ml-1">
+              ZERO-CONFIG
             </span>
           </div>
 
           <div className="w-8 h-8 rounded-full bg-[#1F3A8A] text-white font-bold text-xs flex items-center justify-center">
-            AJ
+            G
           </div>
         </div>
       </header>
 
       {/* Main Dashboard Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-6">
+        {/* Device Persistence Banner */}
+        <div className="p-3.5 bg-[#EEF2FF] border border-[#C7D2FE] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <HardDrive className="w-4 h-4 text-[#1F3A8A] shrink-0" />
+            <span className="font-semibold text-[#1F3A8A]">
+              Saved on this device only (IndexedDB)
+            </span>
+            <span className="text-[#4B5563] hidden md:inline">
+              — Your documents are kept private in your browser.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportJson}
+              className="px-2.5 py-1 font-semibold text-[#1F3A8A] hover:bg-[#E0E7FF] rounded-lg transition-colors flex items-center gap-1"
+              title="Download backup file of all documents"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export JSON</span>
+            </button>
+
+            <label className="px-2.5 py-1 font-semibold text-[#1F3A8A] hover:bg-[#E0E7FF] rounded-lg transition-colors flex items-center gap-1 cursor-pointer">
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import JSON</span>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportJson}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
         {/* Welcome Banner */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E2D8C3] shadow-xs">
           <div>
             <h1 className="text-2xl font-serif font-bold text-[#14213D]">
-              Welcome back, Student
+              Student Workspace
             </h1>
             <p className="text-xs sm:text-sm text-[#6B7280] mt-1">
-              Generate authentic handwritten assignments or extract solutions from problem sets.
+              Create handwritten assignments, extract solutions, and capture terminal executions.
             </p>
           </div>
 
@@ -165,11 +246,11 @@ export default function DashboardPage() {
               </div>
               <h3 className="font-bold text-base text-[#14213D]">Handwriting Editor</h3>
               <p className="text-xs text-[#6B7280] mt-1">
-                Type text and render realistic handwritten notebook pages with live A4 preview.
+                Deterministic handwriting canvas with ruled paper snapping and 300 DPI A4 PDF export.
               </p>
             </div>
             <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-[#1F3A8A]">
-              <span>Open Canvas Editor</span>
+              <span>Open Editor</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </div>
           </button>
@@ -184,11 +265,11 @@ export default function DashboardPage() {
               </div>
               <h3 className="font-bold text-base text-[#14213D]">AI Assignment Solver</h3>
               <p className="text-xs text-[#6B7280] mt-1">
-                Upload PDF, DOCX, or scanned homework photos to automatically extract and solve questions.
+                Zero-config question extraction with free Groq key (BYOK) or manual question splitting.
               </p>
             </div>
             <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-purple-700">
-              <span>Solve Assignment</span>
+              <span>Open Solver</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </div>
           </Link>
@@ -203,7 +284,7 @@ export default function DashboardPage() {
               </div>
               <h3 className="font-bold text-base text-[#14213D]">Terminal Studio</h3>
               <p className="text-xs text-[#6B7280] mt-1">
-                Execute code via Judge0 CE and render realistic terminal screenshots directly into documents.
+                Execute JavaScript & Python in-browser and capture realistic styled terminal screenshots.
               </p>
             </div>
             <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-emerald-700">
@@ -217,7 +298,7 @@ export default function DashboardPage() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-[#14213D]">Recent Documents</h2>
+              <h2 className="text-lg font-bold text-[#14213D]">Saved Documents</h2>
               <span className="text-xs bg-[#EAE1CB] text-[#14213D] px-2 py-0.5 rounded-full font-semibold">
                 {filteredProjects.length}
               </span>
@@ -251,7 +332,7 @@ export default function DashboardPage() {
                     activeFilter === 'handwriting' ? 'bg-[#1F3A8A] text-white' : 'text-[#6B7280]'
                   }`}
                 >
-                  Notes
+                  Handwriting
                 </button>
                 <button
                   onClick={() => setActiveFilter('solver')}
@@ -266,70 +347,75 @@ export default function DashboardPage() {
           </div>
 
           {/* Projects Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProjects.map((project) => (
-              <div
-                key={project.id}
-                onClick={() => {
-                  setTitle(project.title);
-                  router.push('/editor');
-                }}
-                className="bg-white rounded-2xl border border-[#E2D8C3] p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-[#1F3A8A]" />
-                      <span className="font-bold text-sm text-[#14213D] group-hover:text-[#1F3A8A] transition-colors truncate max-w-[200px]">
-                        {project.title}
-                      </span>
+          {isLoading ? (
+            <div className="p-12 text-center text-xs text-[#6B7280]">
+              Loading projects from IndexedDB...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProjects.map((project) => (
+                <div
+                  key={project.id}
+                  onClick={() => handleOpenProject(project)}
+                  className="bg-white rounded-2xl border border-[#E2D8C3] p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-[#1F3A8A]" />
+                        <span className="font-bold text-sm text-[#14213D] group-hover:text-[#1F3A8A] transition-colors truncate max-w-[200px]">
+                          {project.title}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleDuplicate(project, e)}
+                          className="p-1 hover:bg-[#FAF8F5] rounded text-[#6B7280] hover:text-[#14213D]"
+                          title="Duplicate"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(project.id, e)}
+                          className="p-1 hover:bg-rose-50 rounded text-[#6B7280] hover:text-rose-600"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => handleDuplicate(project, e)}
-                        className="p-1 hover:bg-[#FAF8F5] rounded text-[#6B7280] hover:text-[#14213D]"
-                        title="Duplicate"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => handleDelete(project.id, e)}
-                        className="p-1 hover:bg-rose-50 rounded text-[#6B7280] hover:text-rose-600"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <p className="text-xs text-[#6B7280] line-clamp-2 leading-relaxed">
+                      {project.previewText || project.document.content.slice(0, 100)}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-[#E2D8C3]/60 flex items-center justify-between text-[11px] text-[#9CA3AF]">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
                     </div>
+                    <span className="font-medium text-[#1F3A8A] bg-[#EEF2FF] px-2 py-0.5 rounded-full">
+                      {project.pagesCount || 1} Page
+                    </span>
                   </div>
-
-                  <p className="text-xs text-[#6B7280] line-clamp-2 leading-relaxed">
-                    {project.previewText}
-                  </p>
                 </div>
-
-                <div className="mt-4 pt-3 border-t border-[#E2D8C3]/60 flex items-center justify-between text-[11px] text-[#9CA3AF]">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    <span>{project.updatedAt}</span>
-                  </div>
-                  <span className="font-medium text-[#1F3A8A] bg-[#EEF2FF] px-2 py-0.5 rounded-full">
-                    {project.pages} {project.pages === 1 ? 'Page' : 'Pages'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Helpful Tips Panel */}
         <div className="p-4 bg-[#FAF5E6] border border-[#E2D8C3] rounded-2xl flex items-start gap-3 text-xs text-[#14213D]">
           <BookOpen className="w-5 h-5 text-[#1F3A8A] shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <span className="font-bold text-[#1F3A8A]">Student Pro-Tip: Authentic Ink Snapping</span>
+            <span className="font-bold text-[#1F3A8A]">
+              Deterministic Offline Generation
+            </span>
             <p className="text-[#4B5563] leading-relaxed">
-              When printing assignments to submit physically, select &apos;Ruled with Red Margin&apos; and &apos;Ballpoint Pen&apos;.
-              The lines on your printed page will look indistinguishable from written notebook paper!
+              All handwriting rendering is performed locally via Canvas without AI, ensuring that
+              your assignment exports are identical every time and never depend on server availability.
             </p>
           </div>
         </div>

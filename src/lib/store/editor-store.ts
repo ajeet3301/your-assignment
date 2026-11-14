@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { EngineSettings } from '../engine/types';
+import { localAdapter } from '../storage/local-adapter';
 
 export const DEFAULT_SETTINGS: EngineSettings = {
   fontFamily: "'Caveat', cursive",
@@ -150,16 +151,33 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saveToStorage: () => {
     if (typeof window === 'undefined') return;
     try {
+      const currentTitle = get().title;
+      const currentContent = get().content;
+      const currentSettings = get().settings;
+      const now = new Date().toISOString();
+
       const data = {
-        title: get().title,
-        content: get().content,
-        settings: get().settings,
-        updatedAt: new Date().toISOString(),
+        title: currentTitle,
+        content: currentContent,
+        settings: currentSettings,
+        updatedAt: now,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       set({ lastSaved: new Date() });
+
+      // Save to IndexedDB (Dexie)
+      localAdapter.saveProject({
+        id: 'current-active-project',
+        title: currentTitle,
+        type: 'handwriting',
+        document: { content: currentContent, settings: currentSettings },
+        previewText: currentContent.slice(0, 100),
+        pagesCount: 1,
+        updatedAt: now,
+        createdAt: now,
+      });
     } catch (e) {
-      console.warn('Autosave to localStorage failed', e);
+      console.warn('Autosave failed', e);
     }
   },
 
