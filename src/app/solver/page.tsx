@@ -164,6 +164,8 @@ export default function SolverPage() {
   const [isExecutingAll, setIsExecutingAll] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [isSheetFocused, setIsSheetFocused] = useState(false);
 
   // Auto-extract on initial mount
   useEffect(() => {
@@ -712,7 +714,7 @@ export default function SolverPage() {
             <button
               onClick={handleGenerateAll}
               disabled={isGeneratingAll || questions.length === 0}
-              className="px-3.5 py-2 font-bold text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 font-bold text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 disabled:opacity-50 rounded-xl shadow-xs transition-all duration-150 hover:scale-105 active:scale-95 flex items-center gap-1.5"
               title="Solve all questions using server-side AI (.env)"
             >
               {isGeneratingAll ? (
@@ -733,7 +735,7 @@ export default function SolverPage() {
               <button
                 onClick={handleExecuteAll}
                 disabled={isExecutingAll || questions.length === 0}
-                className="px-3.5 py-2 font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-2 font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-xs transition-all duration-150 hover:scale-105 active:scale-95 flex items-center gap-1.5"
                 title="Run all SQL/code queries and capture real terminal screenshots"
               >
                 {isExecutingAll ? (
@@ -754,7 +756,7 @@ export default function SolverPage() {
             <button
               onClick={handleDownloadDocx}
               disabled={isExportingDocx || questions.length === 0}
-              className="px-4 py-2 font-bold text-xs text-white bg-[#1F3A8A] hover:bg-[#1A3175] disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 font-bold text-xs text-white bg-[#1F3A8A] hover:bg-[#1A3175] disabled:opacity-50 rounded-xl shadow-xs transition-all duration-150 hover:scale-105 active:scale-95 flex items-center gap-1.5"
               title="Download professional Word document (.docx) with student header, answers, diagrams and screenshots"
             >
               {isExportingDocx ? (
@@ -774,7 +776,7 @@ export default function SolverPage() {
             <button
               onClick={handleSendToHandwriting}
               disabled={questions.length === 0}
-              className="px-3.5 py-2 font-bold text-xs text-[#1F3A8A] bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 font-bold text-xs text-[#1F3A8A] bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] rounded-xl shadow-xs transition-all duration-150 hover:scale-105 active:scale-95 flex items-center gap-1.5"
               title="Send full assignment to handwriting generator with embedded diagrams and output screenshots"
             >
               <span>Send to Handwriting</span>
@@ -786,13 +788,13 @@ export default function SolverPage() {
               <button
                 onClick={handleExportJson}
                 disabled={questions.length === 0}
-                className="p-2 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-lg transition-colors"
+                className="p-2 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-lg transition-all duration-150 hover:scale-110 active:scale-95"
                 title="Export assignment to JSON"
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
               <label
-                className="p-2 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-lg transition-colors cursor-pointer"
+                className="p-2 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-lg transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer"
                 title="Import assignment JSON"
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -811,7 +813,18 @@ export default function SolverPage() {
         {/* Solver Workspace (Split Grid) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Input Prompt / Raw Text (4 Cols) */}
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-[#E2D8C3] p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <div
+            onClick={() => setIsSheetFocused(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setIsSheetFocused(false);
+            }}
+            tabIndex={0}
+            className={`lg:col-span-4 bg-white rounded-2xl border transition-all duration-300 outline-none p-5 flex flex-col justify-between space-y-4 ${
+              isSheetFocused
+                ? 'scale-[1.012] shadow-xl border-[#1F3A8A] ring-2 ring-[#1F3A8A]/20 relative z-10'
+                : 'border-[#E2D8C3] shadow-xs hover:shadow-md hover:scale-[1.008] hover:border-[#1F3A8A]/40'
+            }`}
+          >
             <div className="space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="text-xs font-bold text-[#14213D] uppercase tracking-wider flex items-center gap-1.5">
@@ -928,25 +941,62 @@ export default function SolverPage() {
                 {questions.map((q) => {
                   const typeCfg = QUESTION_TYPE_CONFIG[q.type] || QUESTION_TYPE_CONFIG.theory;
                   const TypeIcon = typeCfg.icon;
+                  const isActive = activeCardId === q.id;
 
                   return (
                     <div
                       key={q.id}
-                      className="p-4 bg-white rounded-2xl border border-[#E2D8C3] shadow-xs space-y-3 transition-all"
+                      onClick={() => {
+                        if (activeCardId !== q.id) setActiveCardId(q.id);
+                      }}
+                      className={`transition-all duration-300 ease-out bg-white rounded-2xl border space-y-3.5 ${
+                        isActive
+                          ? 'p-5 scale-[1.02] shadow-2xl border-[#1F3A8A] ring-3 ring-[#1F3A8A]/20 relative z-20 my-3'
+                          : 'p-4 border-[#E2D8C3] shadow-xs hover:shadow-lg hover:scale-[1.01] hover:border-[#1F3A8A]/40 cursor-pointer'
+                      }`}
                     >
+                      {/* Active Focus Banner with Shrink Button */}
+                      {isActive && (
+                        <div className="flex items-center justify-between bg-gradient-to-r from-[#EEF2FF] to-[#FAF8F5] border border-[#C7D2FE] px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#1F3A8A] shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-[#1F3A8A] animate-pulse" />
+                            <span>Active Question Card • Magnified for Easy Editing & Selection</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveCardId(null);
+                            }}
+                            className="text-[11px] font-bold text-[#1F3A8A] hover:bg-[#E0E7FF] px-2 py-0.5 rounded-md flex items-center gap-1 transition-all duration-150 hover:scale-105 active:scale-95"
+                            title="Click to shrink back"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Shrink</span>
+                          </button>
+                        </div>
+                      )}
+
                       {/* Card Header */}
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-xs bg-[#1F3A8A] text-white px-2 py-0.5 rounded-md">
+                          <span
+                            className={`font-bold ${
+                              isActive ? 'text-sm px-2.5 py-1' : 'text-xs px-2 py-0.5'
+                            } bg-[#1F3A8A] text-white rounded-md transition-all`}
+                          >
                             {q.numberLabel}
                           </span>
 
-                          {/* Editable Question Type Selector Badge */}
+                          {/* Editable Question Type Selector Badge with Mac dock micro-scale */}
                           <div className="relative inline-flex items-center">
                             <select
                               value={q.type}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleTypeChange(q.id, e.target.value as QuestionType)}
-                              className={`text-[11px] font-bold ${typeCfg.color} ${typeCfg.bg} border ${typeCfg.border} px-2.5 py-0.5 rounded-full uppercase outline-none cursor-pointer appearance-none pr-5`}
+                              className={`font-bold ${typeCfg.color} ${typeCfg.bg} border ${typeCfg.border} ${
+                                isActive ? 'text-xs px-3 py-1' : 'text-[11px] px-2.5 py-0.5'
+                              } rounded-full uppercase outline-none cursor-pointer appearance-none pr-5 transition-all duration-150 hover:scale-105 active:scale-95 shadow-2xs`}
                             >
                               <option value="theory">📖 Theory</option>
                               <option value="numerical">🔢 Numerical</option>
@@ -958,14 +1008,17 @@ export default function SolverPage() {
                             <ChevronDown className="w-3 h-3 text-current absolute right-1.5 pointer-events-none opacity-70" />
                           </div>
 
-                          {/* Theory Marks Selector */}
+                          {/* Theory Marks Selector with Mac dock hover */}
                           {q.type === 'theory' && (
                             <div className="flex items-center gap-1 text-[11px] font-semibold text-[#6B7280]">
                               <span>Marks:</span>
                               <select
                                 value={q.marks || 5}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => handleMarksChange(q.id, parseInt(e.target.value, 10))}
-                                className="bg-[#FAF8F5] border border-[#E2D8C3] rounded-md px-1.5 py-0.5 text-[11px] font-bold outline-none cursor-pointer"
+                                className={`bg-[#FAF8F5] border border-[#E2D8C3] rounded-md ${
+                                  isActive ? 'px-2.5 py-1 text-xs font-bold' : 'px-1.5 py-0.5 text-[11px] font-bold'
+                                } outline-none cursor-pointer transition-all duration-150 hover:scale-105 active:scale-95`}
                               >
                                 <option value={2}>2 Marks (Brief)</option>
                                 <option value={5}>5 Marks (Standard)</option>
@@ -974,12 +1027,15 @@ export default function SolverPage() {
                             </div>
                           )}
 
-                          {/* Code Language Selector */}
+                          {/* Code Language Selector with Mac dock hover */}
                           {q.type === 'code' && (
                             <select
                               value={q.codeLanguage || 'python'}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleLanguageChange(q.id, e.target.value)}
-                              className="bg-[#FAF8F5] border border-[#E2D8C3] rounded-md px-1.5 py-0.5 text-[11px] font-bold outline-none cursor-pointer text-[#1F3A8A]"
+                              className={`bg-[#FAF8F5] border border-[#E2D8C3] rounded-md ${
+                                isActive ? 'px-2.5 py-1 text-xs font-bold' : 'px-1.5 py-0.5 text-[11px] font-bold'
+                              } outline-none cursor-pointer text-[#1F3A8A] transition-all duration-150 hover:scale-105 active:scale-95`}
                             >
                               <option value="python">Python</option>
                               <option value="cpp">C++</option>
@@ -997,12 +1053,17 @@ export default function SolverPage() {
                           )}
                         </div>
 
-                        {/* Action Buttons on Card */}
+                        {/* Action Buttons on Card with Mac dock hover */}
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleGenerateAnswer(q)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGenerateAnswer(q);
+                            }}
                             disabled={generatingId === q.id}
-                            className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg shadow-2xs flex items-center gap-1 transition-colors"
+                            className={`px-3 py-1 font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg shadow-2xs flex items-center gap-1.5 transition-all duration-150 hover:scale-105 active:scale-95 ${
+                              isActive ? 'text-xs py-1.5 px-3.5' : 'text-xs'
+                            }`}
                             title="Generate tailored solution with AI (.env)"
                           >
                             {generatingId === q.id ? (
@@ -1016,8 +1077,13 @@ export default function SolverPage() {
                           {/* SQL Run Button */}
                           {q.type === 'sql' && (
                             <button
-                              onClick={() => handleExecuteQuestion(q)}
-                              className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExecuteQuestion(q);
+                              }}
+                              className={`px-3 py-1 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-all duration-150 hover:scale-105 active:scale-95 ${
+                                isActive ? 'text-xs py-1.5 px-3.5' : 'text-xs'
+                              }`}
                               title="Run query and capture authentic MySQL console screenshot"
                             >
                               <Play className="w-3 h-3 fill-white" />
@@ -1028,8 +1094,13 @@ export default function SolverPage() {
                           {/* Code Run Button */}
                           {q.type === 'code' && (
                             <button
-                              onClick={() => handleExecuteQuestion(q)}
-                              className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExecuteQuestion(q);
+                              }}
+                              className={`px-3 py-1 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-all duration-150 hover:scale-105 active:scale-95 ${
+                                isActive ? 'text-xs py-1.5 px-3.5' : 'text-xs'
+                              }`}
                               title="Execute code in terminal simulation and capture screenshot"
                             >
                               <Play className="w-3 h-3 fill-white" />
@@ -1040,7 +1111,11 @@ export default function SolverPage() {
                       </div>
 
                       {/* Question Prompt */}
-                      <p className="text-xs font-bold text-[#14213D] leading-relaxed">
+                      <p
+                        className={`font-bold text-[#14213D] leading-relaxed transition-all ${
+                          isActive ? 'text-[13px]' : 'text-xs'
+                        }`}
+                      >
                         {q.text}
                       </p>
 
@@ -1069,9 +1144,12 @@ export default function SolverPage() {
                             </label>
                             <textarea
                               value={q.answer || ''}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                              rows={3}
-                              className="w-full p-2.5 text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                              rows={isActive ? 4 : 3}
+                              className={`w-full p-2.5 text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                                isActive ? 'text-[13px]' : 'text-xs'
+                              }`}
                               placeholder="Describe the data path or flowchart components and timing..."
                             />
                           </div>
@@ -1089,9 +1167,12 @@ export default function SolverPage() {
                           </label>
                           <textarea
                             value={q.answer || ''}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                            rows={6}
-                            className="w-full p-2.5 font-mono text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                            rows={isActive ? 8 : 6}
+                            className={`w-full p-2.5 font-mono text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                              isActive ? 'text-[13px] p-3' : 'text-xs'
+                            }`}
                             placeholder="**Given Data:**&#10;- Number of registers = 16&#10;- Register size = 16 bits&#10;&#10;**Formula:**&#10;To select one bit position from 16 registers, one 16:1 MUX is needed per bit position.&#10;&#10;**Step-by-step Calculation:**&#10;Total bits = 16.&#10;Total multiplexers = 16 MUXes of 16:1.&#10;&#10;**Final Answer:**&#10;16 multiplexers of 16:1 are required."
                           />
                         </div>
@@ -1105,9 +1186,12 @@ export default function SolverPage() {
                           </label>
                           <textarea
                             value={q.answer || ''}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                            rows={5}
-                            className="w-full p-2.5 text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                            rows={isActive ? 7 : 5}
+                            className={`w-full p-2.5 text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                              isActive ? 'text-[13px] p-3' : 'text-xs'
+                            }`}
                             placeholder="Type or generate answer with headings and key bullet points..."
                           />
                         </div>
@@ -1122,9 +1206,12 @@ export default function SolverPage() {
                             </label>
                             <textarea
                               value={q.codeSnippet || ''}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleCodeChange(q.id, e.target.value)}
-                              rows={4}
-                              className="w-full p-2.5 font-mono text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                              rows={isActive ? 6 : 4}
+                              className={`w-full p-2.5 font-mono text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                                isActive ? 'text-[13px] p-3' : 'text-xs'
+                              }`}
                               placeholder={`// Enter ${q.codeLanguage || 'code'} implementation here...`}
                               spellCheck={false}
                             />
@@ -1157,9 +1244,12 @@ export default function SolverPage() {
                             </label>
                             <textarea
                               value={q.codeSnippet || ''}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleCodeChange(q.id, e.target.value)}
-                              rows={3}
-                              className="w-full p-2.5 font-mono text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                              rows={isActive ? 5 : 3}
+                              className={`w-full p-2.5 font-mono text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                                isActive ? 'text-[13px] p-3' : 'text-xs'
+                              }`}
                               placeholder="SELECT * FROM SALESMEN WHERE CITY = 'Paris';"
                               spellCheck={false}
                             />
@@ -1175,7 +1265,7 @@ export default function SolverPage() {
                                 <a
                                   href={q.outputScreenshotDataUrl}
                                   download={`mysql-output-${q.numberLabel}.png`}
-                                  className="text-[#1F3A8A] font-bold hover:underline flex items-center gap-1"
+                                  className="text-[#1F3A8A] font-bold hover:underline flex items-center gap-1 transition-all duration-150 hover:scale-105 active:scale-95"
                                 >
                                   <Download className="w-3 h-3" />
                                   <span>Save PNG</span>
@@ -1193,8 +1283,11 @@ export default function SolverPage() {
                             <div className="p-3 bg-[#FAF8F5] border border-dashed border-[#E2D8C3] rounded-xl flex items-center justify-between text-xs text-[#6B7280]">
                               <span>Click <strong>&quot;Run Query&quot;</strong> to execute and capture authentic MySQL screenshot</span>
                               <button
-                                onClick={() => handleExecuteQuestion(q)}
-                                className="text-[#1F3A8A] font-bold hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExecuteQuestion(q);
+                                }}
+                                className="text-[#1F3A8A] font-bold hover:underline transition-all duration-150 hover:scale-105 active:scale-95"
                               >
                                 Run Now
                               </button>
@@ -1211,9 +1304,12 @@ export default function SolverPage() {
                           </label>
                           <textarea
                             value={q.answer || ''}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                            rows={3}
-                            className="w-full p-2.5 text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none leading-relaxed"
+                            rows={isActive ? 4 : 3}
+                            className={`w-full p-2.5 text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none leading-relaxed transition-all ${
+                              isActive ? 'text-[13px] p-3' : 'text-xs'
+                            }`}
                             placeholder="**Correct Option:** (A) Program Counter&#10;**Reason:** The Program Counter holds the memory address of the next instruction to be fetched and executed."
                           />
                         </div>
@@ -1226,9 +1322,12 @@ export default function SolverPage() {
                         </label>
                         <textarea
                           value={q.explanation || ''}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleExplanationChange(q.id, e.target.value)}
-                          rows={2}
-                          className="w-full p-2 text-xs text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-1 focus:ring-[#1F3A8A] resize-none"
+                          rows={isActive ? 3 : 2}
+                          className={`w-full p-2 text-[#14213D] border border-[#E2D8C3] rounded-xl bg-[#FAF8F5] outline-none focus:ring-2 focus:ring-[#1F3A8A]/30 focus:border-[#1F3A8A] resize-none transition-all ${
+                            isActive ? 'text-[13px] p-2.5' : 'text-xs'
+                          }`}
                           placeholder="Optional explanation notes for this question..."
                         />
                       </div>

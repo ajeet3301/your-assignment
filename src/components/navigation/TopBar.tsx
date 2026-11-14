@@ -51,12 +51,12 @@ export const TopBar: React.FC = () => {
           <span>YourAssignment</span>
         </Link>
 
-        <nav className="flex items-center gap-1 text-xs font-semibold">
+        <nav className="flex items-center gap-1.5 text-xs font-semibold">
           <Link
             href="/"
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all duration-200 hover:scale-105 active:scale-95 ${
               pathname === '/' || pathname === '/editor'
-                ? 'bg-[#1F3A8A] text-white'
+                ? 'bg-[#1F3A8A] text-white shadow-xs'
                 : 'text-[#6B7280] hover:text-[#14213D] hover:bg-[#F4EEDC]'
             }`}
           >
@@ -66,9 +66,9 @@ export const TopBar: React.FC = () => {
 
           <Link
             href="/solver"
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all duration-200 hover:scale-105 active:scale-95 ${
               pathname === '/solver'
-                ? 'bg-[#1F3A8A] text-white'
+                ? 'bg-[#1F3A8A] text-white shadow-xs'
                 : 'text-[#6B7280] hover:text-[#14213D] hover:bg-[#F4EEDC]'
             }`}
           >
@@ -78,9 +78,9 @@ export const TopBar: React.FC = () => {
 
           <Link
             href="/terminal"
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all duration-200 hover:scale-105 active:scale-95 ${
               pathname === '/terminal'
-                ? 'bg-[#1F3A8A] text-white'
+                ? 'bg-[#1F3A8A] text-white shadow-xs'
                 : 'text-[#6B7280] hover:text-[#14213D] hover:bg-[#F4EEDC]'
             }`}
           >
@@ -94,7 +94,7 @@ export const TopBar: React.FC = () => {
       <div className="flex items-center gap-2 text-xs">
         <button
           onClick={handleExportJson}
-          className="hidden sm:flex items-center gap-1 px-2.5 py-1 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-md transition-colors"
+          className="hidden sm:flex items-center gap-1 px-2.5 py-1 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-md transition-all duration-150 hover:scale-105 active:scale-95"
           title="Backup all projects to JSON"
         >
           <Download className="w-3.5 h-3.5" />
@@ -102,7 +102,7 @@ export const TopBar: React.FC = () => {
         </button>
 
         <label
-          className="hidden sm:flex items-center gap-1 px-2.5 py-1 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-md transition-colors cursor-pointer"
+          className="hidden sm:flex items-center gap-1 px-2.5 py-1 text-[#6B7280] hover:text-[#14213D] hover:bg-[#FAF8F5] rounded-md transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer"
           title="Restore projects from JSON"
         >
           <Upload className="w-3.5 h-3.5" />
@@ -114,9 +114,9 @@ export const TopBar: React.FC = () => {
 
         <Link
           href="/about"
-          className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+          className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all duration-150 hover:scale-105 active:scale-95 ${
             pathname === '/about'
-              ? 'text-[#1F3A8A] bg-[#EEF2FF]'
+              ? 'text-[#1F3A8A] bg-[#EEF2FF] shadow-xs'
               : 'text-[#6B7280] hover:text-[#14213D] hover:bg-[#F4EEDC]'
           }`}
           title="Fonts & Credits"

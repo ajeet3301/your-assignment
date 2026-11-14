@@ -27,6 +27,7 @@ export const StudentHeaderCard: React.FC<StudentHeaderCardProps> = ({
     externalHeader || DEFAULT_STUDENT_HEADER
   );
   const [isEditing, setIsEditing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   // Sync external header changes (e.g. from auto-detection when a sheet is pasted)
   useEffect(() => {
@@ -82,7 +83,18 @@ export const StudentHeaderCard: React.FC<StudentHeaderCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E2D8C3] p-4 shadow-xs">
+    <div
+      onClick={() => setIsFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false);
+      }}
+      tabIndex={0}
+      className={`bg-white rounded-2xl border transition-all duration-300 ease-out p-4 outline-none ${
+        isFocused || isEditing
+          ? 'scale-[1.015] shadow-xl border-[#1F3A8A] ring-2 ring-[#1F3A8A]/20 relative z-10'
+          : 'border-[#E2D8C3] shadow-xs hover:shadow-md hover:scale-[1.008] hover:border-[#1F3A8A]/40'
+      }`}
+    >
       <div className="flex items-center justify-between mb-3 border-b border-[#E2D8C3] pb-2">
         <div className="flex items-center gap-2">
           <GraduationCap className="w-4 h-4 text-[#1F3A8A]" />
@@ -94,11 +106,15 @@ export const StudentHeaderCard: React.FC<StudentHeaderCardProps> = ({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (isEditing) handleSave();
-              else setIsEditing(true);
+              else {
+                setIsEditing(true);
+                setIsFocused(true);
+              }
             }}
-            className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+            className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all duration-150 hover:scale-105 active:scale-95 ${
               isEditing
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
                 : 'bg-[#FAF8F5] hover:bg-[#EEF2FF] text-[#1F3A8A] border border-[#E2D8C3]'
