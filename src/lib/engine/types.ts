@@ -21,12 +21,14 @@ export interface Margins {
 export interface EngineSettings {
   fontFamily: string;
   fontSize: number; // pt (typically 14-22)
+  fontWeight: number; // 400 or 600
   lineSpacing: number; // line height multiplier or ruling height in mm
   letterSpacing: number; // px variation
   wordSpacing: number; // px variation
   paragraphSpacing: number; // px
   slant: number; // degrees (-15 to +15)
   inkColor: string; // hex (e.g. #1B3FA0, #111827)
+  headingColor?: string; // optional override for headings
   penType: PenType;
   paperStyle: PaperStyle;
   paperColor: string; // hex (e.g. #FBF7EE, #FFFFFF)
@@ -36,6 +38,18 @@ export interface EngineSettings {
   fatigue: boolean;
   paperTexture: boolean;
   phoneScanLook: boolean;
+  // Natural variation physics controls
+  inkVariation: number; // 0 to 100% (random shade change per letter)
+  baselineWobble: number; // 0 to 100%
+  spacingIrregularity: number; // 0 to 100%
+  rotationJitter: number; // 0 to 100%
+}
+
+export interface TextSpan {
+  text: string;
+  fontFamily?: string;
+  color?: string;
+  isBold?: boolean;
 }
 
 export interface PageLayout {
@@ -52,11 +66,14 @@ export interface MeasuredGlyph {
   rotation: number;
   skewX: number;
   opacity: number;
+  color: string;
+  fontFamily: string;
   baselineDrift: number;
 }
 
 export interface MeasuredLine {
   text: string;
+  spans: TextSpan[];
   glyphs: MeasuredGlyph[];
   y: number;
   height: number;

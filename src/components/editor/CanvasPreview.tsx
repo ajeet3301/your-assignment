@@ -10,9 +10,13 @@ import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CanvasPreviewProps {
   onPageCountChange?: (count: number) => void;
+  hoverFontFamily?: string | null;
 }
 
-export const CanvasPreview: React.FC<CanvasPreviewProps> = ({ onPageCountChange }) => {
+export const CanvasPreview: React.FC<CanvasPreviewProps> = ({
+  onPageCountChange,
+  hoverFontFamily,
+}) => {
   const { content, settings, zoom, currentPage, setCurrentPage } = useEditorStore();
   const [debouncedContent, setDebouncedContent] = useState(content);
 
@@ -57,6 +61,7 @@ export const CanvasPreview: React.FC<CanvasPreviewProps> = ({ onPageCountChange 
               page,
               totalPages: pages.length,
               settings,
+              hoverFontFamily,
             });
           }
         });

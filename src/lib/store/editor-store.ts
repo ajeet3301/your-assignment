@@ -5,6 +5,7 @@ import { localAdapter } from '../storage/local-adapter';
 export const DEFAULT_SETTINGS: EngineSettings = {
   fontFamily: "'Caveat', cursive",
   fontSize: 18,
+  fontWeight: 400,
   lineSpacing: 1.5,
   letterSpacing: 0,
   wordSpacing: 0,
@@ -25,6 +26,10 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   fatigue: true,
   paperTexture: true,
   phoneScanLook: false,
+  inkVariation: 25,
+  baselineWobble: 35,
+  spacingIrregularity: 25,
+  rotationJitter: 30,
 };
 
 const DEFAULT_SAMPLE_CONTENT = `# Quantum Computing & Superposition

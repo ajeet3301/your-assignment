@@ -44,6 +44,7 @@ export default function HomePage() {
   const [mobileTab, setMobileTab] = useState<'input' | 'preview' | 'settings'>('preview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [hoverFontFamily, setHoverFontFamily] = useState<string | null>(null);
 
   useEffect(() => {
     loadFromStorage();
@@ -197,7 +198,7 @@ export default function HomePage() {
             mobileTab === 'input' ? 'block' : 'hidden md:block'
           }`}
         >
-          <InputPanel />
+          <InputPanel onHoverFont={setHoverFontFamily} />
         </div>
 
         {/* Center: Live A4 Canvas Preview */}
@@ -206,7 +207,10 @@ export default function HomePage() {
             mobileTab === 'preview' ? 'block' : 'hidden md:block'
           }`}
         >
-          <CanvasPreview onPageCountChange={setPageCount} />
+          <CanvasPreview
+            onPageCountChange={setPageCount}
+            hoverFontFamily={hoverFontFamily}
+          />
         </div>
 
         {/* Right: Settings Panel */}

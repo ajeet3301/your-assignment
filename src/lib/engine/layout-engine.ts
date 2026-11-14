@@ -1,4 +1,4 @@
-import { EngineSettings, PageLayout, MeasuredLine, A4_WIDTH_MM, A4_HEIGHT_MM } from './types';
+import { EngineSettings, PageLayout, MeasuredLine, TextSpan, A4_WIDTH_MM, A4_HEIGHT_MM } from './types';
 import { getRulingMetrics } from './paper-ruling';
 
 export interface LayoutOptions {
@@ -8,7 +8,91 @@ export interface LayoutOptions {
 }
 
 /**
- * Calculates page-by-page layout with baseline grid snapping and line wrapping.
+ * Parses markdown inline styling, per-selection colors, and font overrides.
+ * Supports:
+ * - [colored text]{#E5484D} or [text]{color=#15803D}
+ * - [font override]{font='Caveat', cursive}
+ * - **bold text**
+ */
+export function parseSpans(
+  text: string,
+  defaultFont: string,
+  defaultColor: string
+): TextSpan[] {
+  const spans: TextSpan[] = [];
+  // Matches:
+  // 1. [content]{attrs}
+  // 2. **bold**
+  const regex = /\[([^\]]+)\]\{([^}]+)\}|\*\*([^*]+)\*\*/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Text before match
+    if (match.index > lastIndex) {
+      spans.push({
+        text: text.slice(lastIndex, match.index),
+        fontFamily: defaultFont,
+        color: defaultColor,
+        isBold: false,
+      });
+    }
+
+    if (match[1] !== undefined && match[2] !== undefined) {
+      // Attribute span: [text]{attrs}
+      const spanContent = match[1];
+      const rawAttrs = match[2].trim();
+
+      let spanColor = defaultColor;
+      let spanFont = defaultFont;
+
+      if (rawAttrs.startsWith('#')) {
+        spanColor = rawAttrs;
+      } else {
+        const colorMatch = rawAttrs.match(/color\s*=\s*['"]?([#a-zA-Z0-9]+)['"]?/i);
+        if (colorMatch) spanColor = colorMatch[1];
+
+        const fontMatch = rawAttrs.match(/font\s*=\s*['"]?([^'"]+)['"]?/i);
+        if (fontMatch) spanFont = fontMatch[1];
+      }
+
+      spans.push({
+        text: spanContent,
+        fontFamily: spanFont,
+        color: spanColor,
+        isBold: false,
+      });
+    } else if (match[3] !== undefined) {
+      // Bold span: **text**
+      spans.push({
+        text: match[3],
+        fontFamily: defaultFont,
+        color: defaultColor,
+        isBold: true,
+      });
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  // Trailing text
+  if (lastIndex < text.length) {
+    spans.push({
+      text: text.slice(lastIndex),
+      fontFamily: defaultFont,
+      color: defaultColor,
+      isBold: false,
+    });
+  }
+
+  return spans.length > 0
+    ? spans
+    : [{ text, fontFamily: defaultFont, color: defaultColor, isBold: false }];
+}
+
+/**
+ * Calculates page-by-page layout with baseline grid snapping, mixed fonts, and colors.
  */
 export function calculateDocumentLayout(
   rawText: string,
@@ -34,7 +118,6 @@ export function calculateDocumentLayout(
   const startY = ruling.firstLineY;
   const maxY = canvasHeight - settings.margins.bottom * scaleY;
 
-  // Split content into blocks / paragraphs
   const rawParagraphs = rawText.split('\n');
   const pages: PageLayout[] = [];
 
@@ -42,13 +125,11 @@ export function calculateDocumentLayout(
   let currentLines: MeasuredLine[] = [];
   let currentY = startY;
 
-  // Approximate character width if measureTextFn is not provided
   const estimateCharWidth = (fontSizePx: number) => fontSizePx * 0.48;
 
   for (let pIdx = 0; pIdx < rawParagraphs.length; pIdx++) {
     const paragraph = rawParagraphs[pIdx];
 
-    // Check if line is a heading
     let isHeading = false;
     let headingLevel = 0;
     let textToWrap = paragraph;
@@ -72,7 +153,7 @@ export function calculateDocumentLayout(
       : settings.fontSize;
     const fontSizePx = currentFontSize * (canvasWidth / 800);
 
-    // Empty paragraph represents a blank line
+    // Empty paragraph
     if (textToWrap.trim() === '') {
       currentY += lineSpacingPx * 0.7;
       if (currentY > maxY) {
@@ -84,59 +165,46 @@ export function calculateDocumentLayout(
       continue;
     }
 
-    // Wrap words into lines
-    const words = textToWrap.split(' ');
-    let currentLineWords: string[] = [];
-    let currentLineWidth = 0;
+    const defaultInk = isHeading && settings.headingColor ? settings.headingColor : settings.inkColor;
+    const spans = parseSpans(textToWrap, settings.fontFamily, defaultInk);
 
-    const getWordWidth = (word: string) => {
-      if (measureTextFn) {
-        return measureTextFn(word, `${fontSizePx}px ${settings.fontFamily}`);
-      }
-      return word.length * estimateCharWidth(fontSizePx);
-    };
-
-    const spaceWidth = getWordWidth(' ');
-
-    for (let w = 0; w < words.length; w++) {
-      const word = words[w];
-      const wordWidth = getWordWidth(word);
-
-      if (currentLineWidth + wordWidth + (currentLineWords.length > 0 ? spaceWidth : 0) <= usableWidth) {
-        currentLineWords.push(word);
-        currentLineWidth += wordWidth + (currentLineWords.length > 1 ? spaceWidth : 0);
-      } else {
-        // Push line
-        if (currentLineWords.length > 0) {
-          const lineText = currentLineWords.join(' ');
-          if (currentY > maxY && currentLines.length > 0) {
-            // New page
-            pages.push({ pageIndex: currentPageIndex, lines: currentLines });
-            currentPageIndex++;
-            currentLines = [];
-            currentY = startY;
-          }
-
-          currentLines.push({
-            text: lineText,
-            glyphs: [],
-            y: currentY,
-            height: lineSpacingPx,
-            isHeading,
-            headingLevel,
-          });
-
-          currentY += lineSpacingPx;
-        }
-
-        currentLineWords = [word];
-        currentLineWidth = wordWidth;
-      }
+    // Flatten spans into word tokens with their respective styling
+    interface StyledWord {
+      word: string;
+      fontFamily: string;
+      color: string;
+      isBold: boolean;
+      width: number;
     }
 
-    // Remaining words in paragraph
-    if (currentLineWords.length > 0) {
-      const lineText = currentLineWords.join(' ');
+    const styledWords: StyledWord[] = [];
+
+    spans.forEach((span) => {
+      const words = span.text.split(' ');
+      words.forEach((w) => {
+        if (!w && words.length > 1) return;
+        const fontStyle = `${span.isBold || settings.fontWeight > 500 ? '600' : '400'} ${fontSizePx}px ${span.fontFamily || settings.fontFamily}`;
+        const width = measureTextFn
+          ? measureTextFn(w, fontStyle)
+          : w.length * estimateCharWidth(fontSizePx);
+
+        styledWords.push({
+          word: w,
+          fontFamily: span.fontFamily || settings.fontFamily,
+          color: span.color || defaultInk,
+          isBold: span.isBold || false,
+          width,
+        });
+      });
+    });
+
+    const spaceWidth = estimateCharWidth(fontSizePx) * 0.9;
+    let currentLineWords: StyledWord[] = [];
+    let currentLineWidth = 0;
+
+    const commitLine = () => {
+      if (currentLineWords.length === 0) return;
+
       if (currentY > maxY && currentLines.length > 0) {
         pages.push({ pageIndex: currentPageIndex, lines: currentLines });
         currentPageIndex++;
@@ -144,8 +212,33 @@ export function calculateDocumentLayout(
         currentY = startY;
       }
 
+      // Reconstruct spans for this specific line
+      const lineSpans: TextSpan[] = [];
+      let activeSpan: TextSpan | null = null;
+
+      currentLineWords.forEach((sw, idx) => {
+        if (
+          activeSpan &&
+          activeSpan.fontFamily === sw.fontFamily &&
+          activeSpan.color === sw.color &&
+          activeSpan.isBold === sw.isBold
+        ) {
+          activeSpan.text += ' ' + sw.word;
+        } else {
+          if (activeSpan) lineSpans.push(activeSpan);
+          activeSpan = {
+            text: sw.word,
+            fontFamily: sw.fontFamily,
+            color: sw.color,
+            isBold: sw.isBold,
+          };
+        }
+      });
+      if (activeSpan) lineSpans.push(activeSpan);
+
       currentLines.push({
-        text: lineText,
+        text: currentLineWords.map((sw) => sw.word).join(' '),
+        spans: lineSpans,
         glyphs: [],
         y: currentY,
         height: lineSpacingPx,
@@ -154,7 +247,25 @@ export function calculateDocumentLayout(
       });
 
       currentY += lineSpacingPx;
+      currentLineWords = [];
+      currentLineWidth = 0;
+    };
+
+    for (let i = 0; i < styledWords.length; i++) {
+      const sw = styledWords[i];
+      const wordPlusSpace = currentLineWidth > 0 ? spaceWidth + sw.width : sw.width;
+
+      if (currentLineWidth + wordPlusSpace <= usableWidth || currentLineWords.length === 0) {
+        currentLineWords.push(sw);
+        currentLineWidth += wordPlusSpace;
+      } else {
+        commitLine();
+        currentLineWords.push(sw);
+        currentLineWidth = sw.width;
+      }
     }
+
+    commitLine();
 
     // Paragraph spacing
     if (settings.paragraphSpacing > 0) {
@@ -162,7 +273,6 @@ export function calculateDocumentLayout(
     }
   }
 
-  // Final page
   if (currentLines.length > 0 || pages.length === 0) {
     pages.push({ pageIndex: currentPageIndex, lines: currentLines });
   }

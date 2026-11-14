@@ -9,6 +9,28 @@ export interface RenderPageOptions {
   totalPages: number;
   settings: EngineSettings;
   dpi?: number;
+  hoverFontFamily?: string | null; // Real-time hover preview
+}
+
+/**
+ * Perturbs ink color slightly per glyph based on the inkVariation slider (0-100%)
+ */
+function applyInkVariation(hex: string, prng: PRNG, variationPercent: number): string {
+  if (!hex || variationPercent <= 0) return hex || '#1B3FA0';
+
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+
+  const delta = Math.round(prng.gaussian(0, (variationPercent / 100) * 16));
+
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const newR = clamp(r + delta);
+  const newG = clamp(g + delta);
+  const newB = clamp(b + delta);
+
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 }
 
 /**
@@ -43,6 +65,28 @@ function drawWobblyLine(
 }
 
 /**
+ * Checks if a font family is cursive / joined
+ */
+function isCursiveFont(family: string): boolean {
+  const lower = family.toLowerCase();
+  return (
+    lower.includes('caveat') ||
+    lower.includes('homemade apple') ||
+    lower.includes('dancing') ||
+    lower.includes('cedarville') ||
+    lower.includes('sacramento') ||
+    lower.includes('allura') ||
+    lower.includes('satisfy') ||
+    lower.includes('great vibes') ||
+    lower.includes('la belle') ||
+    lower.includes('alex brush') ||
+    lower.includes('marck') ||
+    lower.includes('dafoe') ||
+    lower.includes('yellowtail')
+  );
+}
+
+/**
  * Renders a single handwritten page onto a canvas with realism physics
  */
 export function renderHandwrittenPage({
@@ -51,6 +95,7 @@ export function renderHandwrittenPage({
   totalPages,
   settings,
   dpi = PREVIEW_SCALE_DPI,
+  hoverFontFamily,
 }: RenderPageOptions) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -80,12 +125,16 @@ export function renderHandwrittenPage({
   const scaleX = width / A4_WIDTH_MM;
   const leftMarginPx = settings.margins.left * scaleX;
 
-  // 2. Render each line glyph-by-glyph
+  // Sliders normalizers
+  const wobbleFactor = (settings.baselineWobble ?? 35) / 100;
+  const spacingFactor = (settings.spacingIrregularity ?? 25) / 100;
+  const rotationFactor = (settings.rotationJitter ?? 30) / 100;
+  const inkVarFactor = settings.inkVariation ?? 25;
+
+  // 2. Render each line
   for (let lineIdx = 0; lineIdx < page.lines.length; lineIdx++) {
     const line = page.lines[lineIdx];
-    const text = line.text;
 
-    // Line-level fatigue drift: as we go down the page, baseline shifts slightly
     const pageProgression = line.y / height; // 0 to 1
     const fatigueMultiplier = settings.fatigue ? 1.0 + pageProgression * 0.4 : 1.0;
 
@@ -98,79 +147,115 @@ export function renderHandwrittenPage({
 
     const fontSizePx = baseFontSize * scale;
 
-    ctx.font = `${line.isHeading ? '600' : '400'} ${fontSizePx}px ${settings.fontFamily}`;
-    ctx.textBaseline = 'alphabetic';
+    const spansToRender = line.spans && line.spans.length > 0
+      ? line.spans
+      : [{
+          text: line.text,
+          fontFamily: hoverFontFamily || settings.fontFamily,
+          color: line.isHeading && settings.headingColor ? settings.headingColor : settings.inkColor,
+          isBold: false,
+        }];
 
-    const words = text.split(' ');
+    for (let sIdx = 0; sIdx < spansToRender.length; sIdx++) {
+      const span = spansToRender[sIdx];
+      const activeFont = hoverFontFamily || span.fontFamily || settings.fontFamily;
+      const activeColor = span.color || settings.inkColor;
+      const isBold = span.isBold || settings.fontWeight > 500;
 
-    for (let wIdx = 0; wIdx < words.length; wIdx++) {
-      const word = words[wIdx];
+      ctx.font = `${isBold || line.isHeading ? '600' : '400'} ${fontSizePx}px ${activeFont}`;
+      ctx.textBaseline = 'alphabetic';
 
-      // For cursive fonts, we render in connected micro-segments or per-glyph with joined spacing
-      for (let cIdx = 0; cIdx < word.length; cIdx++) {
-        const char = word[cIdx];
+      const isCursive = isCursiveFont(activeFont);
+      const words = span.text.split(' ');
 
-        // Stochastic per-glyph variations
-        const sizeJitter = 1.0 + prng.gaussian(0, 0.04 * fatigueMultiplier);
-        const rotationJitter = prng.gaussian(0, (0.025 + (settings.slant * Math.PI) / 180) * fatigueMultiplier);
-        baselineDrift += prng.gaussian(0, 0.3 * fatigueMultiplier);
-        baselineDrift = Math.max(-3 * scale, Math.min(3 * scale, baselineDrift));
-
-        const charMetrics = ctx.measureText(char);
-        const charWidth = charMetrics.width;
-
-        // Pen pressure & opacity jitter
-        const opacityJitter = Math.max(
-          0.3,
-          Math.min(1.0, pen.baseOpacity + prng.gaussian(0, pen.opacityJitter))
-        );
-
-        ctx.save();
-        ctx.fillStyle = settings.inkColor;
-        ctx.globalAlpha = opacityJitter;
-
-        // Position & Rotate around glyph center
-        const glyphX = cursorX + charWidth * 0.5;
-        const glyphY = line.y + baselineDrift - fontSizePx * 0.15;
-
-        ctx.translate(glyphX, glyphY);
-        ctx.rotate(rotationJitter);
-        ctx.scale(sizeJitter, sizeJitter);
-
-        // Skew
-        if (settings.slant !== 0) {
-          ctx.transform(1, 0, Math.tan((settings.slant * Math.PI) / 180), 1, 0, 0);
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        if (!word) {
+          cursorX += ctx.measureText(' ').width * 0.9;
+          continue;
         }
 
-        ctx.fillText(char, -charWidth * 0.5, fontSizePx * 0.15);
+        // For cursive fonts, we vary rotation and baseline drift at the WORD level to preserve joins
+        const wordRotation = isCursive
+          ? prng.gaussian(0, (0.02 * rotationFactor + (settings.slant * Math.PI) / 180) * fatigueMultiplier)
+          : 0;
 
-        // Optional pen bleed / stroke softness simulation
-        if (pen.bleedAmount > 0.2) {
-          ctx.globalAlpha = opacityJitter * 0.15;
-          ctx.lineWidth = pen.bleedAmount * scale;
-          ctx.strokeStyle = settings.inkColor;
-          ctx.strokeText(char, -charWidth * 0.5, fontSizePx * 0.15);
+        for (let cIdx = 0; cIdx < word.length; cIdx++) {
+          const char = word[cIdx];
+
+          const sizeJitter = 1.0 + prng.gaussian(0, 0.05 * spacingFactor * fatigueMultiplier);
+          const rotationJitter = isCursive
+            ? wordRotation
+            : prng.gaussian(0, (0.03 * rotationFactor + (settings.slant * Math.PI) / 180) * fatigueMultiplier);
+
+          baselineDrift += prng.gaussian(0, 0.35 * wobbleFactor * fatigueMultiplier);
+          baselineDrift = Math.max(-3.5 * scale, Math.min(3.5 * scale, baselineDrift));
+
+          const charMetrics = ctx.measureText(char);
+          const charWidth = charMetrics.width;
+
+          // Ink opacity and shade variation
+          const opacityJitter = Math.max(
+            0.3,
+            Math.min(1.0, pen.baseOpacity + prng.gaussian(0, pen.opacityJitter))
+          );
+          const variedColor = applyInkVariation(activeColor, prng, inkVarFactor);
+
+          ctx.save();
+          ctx.fillStyle = variedColor;
+          ctx.globalAlpha = opacityJitter;
+
+          const glyphX = cursorX + charWidth * 0.5;
+          const glyphY = line.y + baselineDrift - fontSizePx * 0.15;
+
+          ctx.translate(glyphX, glyphY);
+          ctx.rotate(rotationJitter);
+          ctx.scale(sizeJitter, sizeJitter);
+
+          if (settings.slant !== 0) {
+            ctx.transform(1, 0, Math.tan((settings.slant * Math.PI) / 180), 1, 0, 0);
+          }
+
+          ctx.fillText(char, -charWidth * 0.5, fontSizePx * 0.15);
+
+          // Simulated bold weight via micro-stroke
+          if (isBold) {
+            ctx.lineWidth = Math.max(0.6, 1.0 * scale);
+            ctx.strokeStyle = variedColor;
+            ctx.strokeText(char, -charWidth * 0.5, fontSizePx * 0.15);
+          }
+
+          // Pen bleed simulation
+          if (pen.bleedAmount > 0.2) {
+            ctx.globalAlpha = opacityJitter * 0.15;
+            ctx.lineWidth = pen.bleedAmount * scale;
+            ctx.strokeStyle = variedColor;
+            ctx.strokeText(char, -charWidth * 0.5, fontSizePx * 0.15);
+          }
+
+          ctx.restore();
+
+          const letterAdvance = isCursive
+            ? charWidth * 0.98 // tighter tracking to keep joins seamless
+            : charWidth + (settings.letterSpacing + prng.range(-0.4, 0.6) * spacingFactor) * scale;
+
+          cursorX += letterAdvance;
         }
 
-        ctx.restore();
-
-        // Advance cursor
-        const letterSpacingJitter = (settings.letterSpacing + prng.range(-0.5, 0.8)) * scale;
-        cursorX += charWidth + letterSpacingJitter;
-      }
-
-      // Word spacing jitter
-      if (wIdx < words.length - 1) {
-        const spaceMetrics = ctx.measureText(' ');
-        const wordSpacingJitter = (settings.wordSpacing + prng.range(-1.2, 2.0)) * scale;
-        cursorX += spaceMetrics.width + wordSpacingJitter;
+        // Word spacing
+        if (wIdx < words.length - 1) {
+          const spaceMetrics = ctx.measureText(' ');
+          const wordSpacingJitter =
+            (settings.wordSpacing + prng.range(-1.0, 1.8) * spacingFactor) * scale;
+          cursorX += spaceMetrics.width + wordSpacingJitter;
+        }
       }
     }
 
     // Hand-drawn underline for headings
     if (line.isHeading) {
       ctx.save();
-      ctx.strokeStyle = settings.inkColor;
+      ctx.strokeStyle = settings.headingColor || settings.inkColor;
       ctx.lineWidth = Math.max(1.2, 2.0 * scale);
       ctx.globalAlpha = 0.85;
       const underlineY = line.y + 4 * scale;
@@ -182,7 +267,7 @@ export function renderHandwrittenPage({
   // 3. Page Numbering
   if (settings.pageNumbering !== 'none') {
     ctx.save();
-    ctx.font = `400 ${Math.round(14 * scale)}px ${settings.fontFamily}`;
+    ctx.font = `400 ${Math.round(14 * scale)}px ${hoverFontFamily || settings.fontFamily}`;
     ctx.fillStyle = settings.inkColor;
     ctx.globalAlpha = 0.7;
 

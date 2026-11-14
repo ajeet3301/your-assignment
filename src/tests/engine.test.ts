@@ -48,6 +48,11 @@ describe('Handwriting Engine Unit Tests', () => {
       fatigue: true,
       paperTexture: true,
       phoneScanLook: false,
+      fontWeight: 400,
+      inkVariation: 25,
+      baselineWobble: 35,
+      spacingIrregularity: 25,
+      rotationJitter: 30,
     };
 
     // Generate a long text with multiple paragraphs

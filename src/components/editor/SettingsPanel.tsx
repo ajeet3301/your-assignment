@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PenTool,
   Scroll,
@@ -11,11 +11,14 @@ import {
   Search,
   Upload,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import { useEditorStore } from '@/lib/store/editor-store';
 import { ALL_HANDWRITING_FONTS, HandwritingFont } from '@/lib/engine/fonts';
-import { uploadCustomFont, loadSavedCustomFonts } from '@/lib/engine/custom-fonts';
+import { loadSavedCustomFonts } from '@/lib/engine/custom-fonts';
 import { PenType, PaperStyle, PageNumberStyle } from '@/lib/engine/types';
+import { FontUploadModal } from './FontUploadModal';
+import { INK_COLOR_PRESETS } from './ColorPickerToolbar';
 
 export const SettingsPanel: React.FC = () => {
   const { settings, updateSettings } = useEditorStore();
@@ -25,8 +28,7 @@ export const SettingsPanel: React.FC = () => {
   const [fontCategory, setFontCategory] = useState<string>('All');
   const [fontSearch, setFontSearch] = useState('');
   const [customFonts, setCustomFonts] = useState<HandwritingFont[]>([]);
-  const [isUploadingFont, setIsUploadingFont] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // Load custom user fonts from IndexedDB
   useEffect(() => {
@@ -35,35 +37,13 @@ export const SettingsPanel: React.FC = () => {
     });
   }, []);
 
-  const handleFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingFont(true);
-    try {
-      const newFont = await uploadCustomFont(file);
-      setCustomFonts((prev) => [newFont, ...prev]);
-      updateSettings({
-        fontFamily: newFont.family,
-        fontSize: newFont.defaultSize,
-        slant: newFont.defaultSlant,
-      });
-      alert(`Custom font "${newFont.name}" loaded and saved to your device!`);
-    } catch (err) {
-      alert('Failed to load font file. Please provide a valid .ttf, .otf, or .woff2 file.');
-    } finally {
-      setIsUploadingFont(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   const allAvailableFonts: HandwritingFont[] = [...customFonts, ...ALL_HANDWRITING_FONTS];
 
   const filteredFonts = allAvailableFonts.filter((f) => {
     const matchesCategory =
       fontCategory === 'All'
         ? true
-        : fontCategory === 'My Uploads'
+        : fontCategory === 'My Fonts'
         ? f.id.startsWith('custom-')
         : f.category === fontCategory;
 
@@ -81,14 +61,6 @@ export const SettingsPanel: React.FC = () => {
       slant: font.defaultSlant,
     });
   };
-
-  const INK_PRESETS = [
-    { name: 'Royal Blue', color: '#1B3FA0' },
-    { name: 'Deep Ink', color: '#111827' },
-    { name: 'Margin Red', color: '#E5484D' },
-    { name: 'Forest Green', color: '#15803D' },
-    { name: 'Sepia Brown', color: '#78350F' },
-  ];
 
   const PAPER_PRESETS = [
     { name: 'Cream Notebook', color: '#FBF7EE' },
@@ -165,7 +137,7 @@ export const SettingsPanel: React.FC = () => {
 
       {/* Settings Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* TAB 1: HANDWRITING */}
+        {/* TAB 1: HANDWRITING & PHYSICS */}
         {activeTab === 'handwriting' && (
           <div className="space-y-5">
             {/* Font Picker */}
@@ -176,18 +148,14 @@ export const SettingsPanel: React.FC = () => {
                   <span>Handwriting Font ({allAvailableFonts.length})</span>
                 </label>
 
-                {/* Upload Font Button */}
-                <label className="text-[11px] font-semibold text-[#1F3A8A] bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] px-2 py-0.5 rounded cursor-pointer flex items-center gap-1 transition-colors">
+                {/* Open Upload Modal */}
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="text-[11px] font-semibold text-[#1F3A8A] bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] px-2 py-0.5 rounded cursor-pointer flex items-center gap-1 transition-colors"
+                >
                   <Upload className="w-3 h-3" />
-                  <span>{isUploadingFont ? 'Loading...' : 'Upload Font'}</span>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".ttf,.otf,.woff2"
-                    onChange={handleFontUpload}
-                    className="hidden"
-                  />
-                </label>
+                  <span>Upload Font</span>
+                </button>
               </div>
 
               {/* Search Box */}
@@ -204,7 +172,7 @@ export const SettingsPanel: React.FC = () => {
 
               {/* Category Filters */}
               <div className="flex gap-1 overflow-x-auto pb-1 mb-2 text-[11px] scrollbar-none">
-                {['All', 'Neat', 'Casual', 'Cursive', 'Messy', 'Hindi', ...(customFonts.length > 0 ? ['My Uploads'] : [])].map(
+                {['All', 'Neat', 'Casual', 'Cursive', 'Messy', 'Hindi', ...(customFonts.length > 0 ? ['My Fonts'] : [])].map(
                   (cat) => (
                     <button
                       key={cat}
@@ -222,7 +190,7 @@ export const SettingsPanel: React.FC = () => {
               </div>
 
               {/* Font Cards List */}
-              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                 {filteredFonts.length === 0 ? (
                   <div className="text-center py-6 text-xs text-[#9CA3AF]">
                     No fonts match your search
@@ -241,9 +209,9 @@ export const SettingsPanel: React.FC = () => {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-[#14213D] flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-[#14213D] flex items-center gap-1.5 font-sans">
                             {font.name}
-                            <span className="text-[10px] bg-[#FAF5E6] border border-[#E2D8C3] text-[#786F5C] px-1 rounded font-normal font-sans">
+                            <span className="text-[10px] bg-[#FAF5E6] border border-[#E2D8C3] text-[#786F5C] px-1 rounded font-normal">
                               {font.category}
                             </span>
                           </span>
@@ -290,66 +258,170 @@ export const SettingsPanel: React.FC = () => {
               </div>
             </div>
 
-            {/* Ink Color */}
-            <div>
-              <label className="text-xs font-bold text-[#14213D] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-                <Palette className="w-3.5 h-3.5 text-[#1F3A8A]" />
-                <span>Ink Color</span>
-              </label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {INK_PRESETS.map((preset) => (
-                  <button
-                    key={preset.color}
-                    onClick={() => updateSettings({ inkColor: preset.color })}
-                    className={`w-7 h-7 rounded-full border-2 transition-transform ${
-                      settings.inkColor.toLowerCase() === preset.color.toLowerCase()
-                        ? 'scale-115 border-[#1F3A8A] ring-2 ring-[#1F3A8A]/30'
-                        : 'border-transparent hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: preset.color }}
-                    title={preset.name}
+            {/* Global Ink Color & Headings Color */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-[#14213D] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-[#1F3A8A]" />
+                  <span>Global Ink Color</span>
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {INK_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.hex}
+                      onClick={() => updateSettings({ inkColor: preset.hex })}
+                      className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                        settings.inkColor.toLowerCase() === preset.hex.toLowerCase()
+                          ? 'scale-115 border-[#1F3A8A] ring-2 ring-[#1F3A8A]/30'
+                          : 'border-transparent hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: preset.hex }}
+                      title={preset.name}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={settings.inkColor}
+                    onChange={(e) => updateSettings({ inkColor: e.target.value })}
+                    className="w-7 h-7 rounded-full border border-[#E2D8C3] cursor-pointer bg-transparent"
+                    title="Custom Ink Color"
                   />
-                ))}
-                <input
-                  type="color"
-                  value={settings.inkColor}
-                  onChange={(e) => updateSettings({ inkColor: e.target.value })}
-                  className="w-7 h-7 rounded-full border border-[#E2D8C3] cursor-pointer bg-transparent"
-                  title="Custom Color"
-                />
+                </div>
+              </div>
+
+              {/* Headings Accent Color */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between text-xs mb-1 font-semibold">
+                  <span>Headings Accent Color:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-4 h-4 rounded-full border border-black/20"
+                      style={{ backgroundColor: settings.headingColor || settings.inkColor }}
+                    />
+                    <input
+                      type="color"
+                      value={settings.headingColor || settings.inkColor}
+                      onChange={(e) => updateSettings({ headingColor: e.target.value })}
+                      className="w-5 h-5 cursor-pointer border-0 bg-transparent"
+                      title="Custom Heading Color"
+                    />
+                    {settings.headingColor && (
+                      <button
+                        onClick={() => updateSettings({ headingColor: undefined })}
+                        className="text-[10px] text-[#6B7280] hover:text-[#14213D] underline ml-1"
+                      >
+                        Match ink
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Sliders: Size, Slant */}
-            <div className="space-y-3 pt-2 border-t border-[#E2D8C3]">
+            {/* REALISM & NATURAL VARIATION SLIDERS */}
+            <div className="space-y-3 pt-3 border-t border-[#E2D8C3]">
+              <div className="text-xs font-bold uppercase tracking-wider text-[#14213D] flex items-center justify-between">
+                <span>Natural Variation Engine</span>
+                <span className="text-[10px] text-[#1F3A8A] font-semibold bg-[#EEF2FF] px-1.5 py-0.5 rounded">
+                  No AI
+                </span>
+              </div>
+
+              {/* Ink Shade Variation Slider */}
               <div>
                 <div className="flex justify-between text-xs mb-1 font-medium">
-                  <span>Font Size</span>
-                  <span className="font-mono text-[#1F3A8A]">{settings.fontSize} pt</span>
+                  <span>Ink Shade Variation (Per-Letter)</span>
+                  <span className="font-mono text-[#1F3A8A]">{settings.inkVariation ?? 25}%</span>
                 </div>
                 <input
                   type="range"
-                  min="13"
-                  max="26"
-                  value={settings.fontSize}
-                  onChange={(e) => updateSettings({ fontSize: Number(e.target.value) })}
+                  min="0"
+                  max="100"
+                  value={settings.inkVariation ?? 25}
+                  onChange={(e) => updateSettings({ inkVariation: Number(e.target.value) })}
                   className="w-full accent-[#1F3A8A]"
                 />
               </div>
 
+              {/* Baseline Wobble Slider */}
               <div>
                 <div className="flex justify-between text-xs mb-1 font-medium">
-                  <span>Natural Slant</span>
-                  <span className="font-mono text-[#1F3A8A]">{settings.slant}°</span>
+                  <span>Baseline Wobble</span>
+                  <span className="font-mono text-[#1F3A8A]">{settings.baselineWobble ?? 35}%</span>
                 </div>
                 <input
                   type="range"
-                  min="-12"
-                  max="12"
-                  value={settings.slant}
-                  onChange={(e) => updateSettings({ slant: Number(e.target.value) })}
+                  min="0"
+                  max="100"
+                  value={settings.baselineWobble ?? 35}
+                  onChange={(e) => updateSettings({ baselineWobble: Number(e.target.value) })}
                   className="w-full accent-[#1F3A8A]"
                 />
+              </div>
+
+              {/* Spacing Irregularity Slider */}
+              <div>
+                <div className="flex justify-between text-xs mb-1 font-medium">
+                  <span>Spacing Irregularity</span>
+                  <span className="font-mono text-[#1F3A8A]">{settings.spacingIrregularity ?? 25}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={settings.spacingIrregularity ?? 25}
+                  onChange={(e) => updateSettings({ spacingIrregularity: Number(e.target.value) })}
+                  className="w-full accent-[#1F3A8A]"
+                />
+              </div>
+
+              {/* Rotation Jitter Slider */}
+              <div>
+                <div className="flex justify-between text-xs mb-1 font-medium">
+                  <span>Rotation Jitter</span>
+                  <span className="font-mono text-[#1F3A8A]">{settings.rotationJitter ?? 30}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={settings.rotationJitter ?? 30}
+                  onChange={(e) => updateSettings({ rotationJitter: Number(e.target.value) })}
+                  className="w-full accent-[#1F3A8A]"
+                />
+              </div>
+
+              {/* Size & Slant */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1 font-medium">
+                    <span>Font Size</span>
+                    <span className="font-mono text-[#1F3A8A]">{settings.fontSize} pt</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="13"
+                    max="26"
+                    value={settings.fontSize}
+                    onChange={(e) => updateSettings({ fontSize: Number(e.target.value) })}
+                    className="w-full accent-[#1F3A8A]"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1 font-medium">
+                    <span>Slant</span>
+                    <span className="font-mono text-[#1F3A8A]">{settings.slant}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-12"
+                    max="12"
+                    value={settings.slant}
+                    onChange={(e) => updateSettings({ slant: Number(e.target.value) })}
+                    className="w-full accent-[#1F3A8A]"
+                  />
+                </div>
               </div>
 
               {/* Fatigue Toggle */}
@@ -557,6 +629,16 @@ export const SettingsPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Font Upload Modal */}
+      <FontUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onFontSaved={(newFont) => {
+          setCustomFonts((prev) => [newFont, ...prev]);
+          selectFont(newFont);
+        }}
+      />
     </div>
   );
 };
