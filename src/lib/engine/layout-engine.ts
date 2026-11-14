@@ -155,17 +155,27 @@ export function calculateDocumentLayout(
       }
 
       if (sizeToken === 'small' || sizeToken === 'chhota' || sizeToken === 'tiny') {
-        sizeMultiplier = 0.45; // Chhota (Small)
+        sizeMultiplier = 0.45; // Small
       } else if (sizeToken === 'large' || sizeToken === 'bada' || sizeToken === 'big') {
-        sizeMultiplier = 0.88; // Bada (Large)
+        sizeMultiplier = 0.88; // Large
       } else if (sizeToken === 'full') {
-        sizeMultiplier = 1.0; // Pura width
+        sizeMultiplier = 1.0; // Full width
       } else if (sizeToken.endsWith('%')) {
         const pct = parseInt(sizeToken, 10);
         if (!isNaN(pct)) sizeMultiplier = Math.min(1.0, Math.max(0.2, pct / 100));
       } else if (/^\d+$/.test(sizeToken)) {
         const num = parseInt(sizeToken, 10);
         if (!isNaN(num)) sizeMultiplier = Math.min(1.0, Math.max(0.2, num / 100));
+      }
+
+      // Parse alignment: left, center/mid, right
+      let imageAlign: 'left' | 'center' | 'right' = 'center'; // default center (mid)
+      const alignMatch = (alt + ' ' + rawUrl).match(/(?:\||\s+=)(left|center|mid|right)\b/i);
+      if (alignMatch) {
+        const aToken = alignMatch[1].toLowerCase();
+        if (aToken === 'left') imageAlign = 'left';
+        else if (aToken === 'right') imageAlign = 'right';
+        else imageAlign = 'center';
       }
 
       const resolvedUrl = resolveImageUrl(rawUrl);
@@ -189,6 +199,7 @@ export function calculateDocumentLayout(
         imageUrl: resolvedUrl,
         imageWidth: imgWidth,
         imageHeight: imgHeight,
+        imageAlign,
       });
 
       currentY += imgHeight + lineSpacingPx;

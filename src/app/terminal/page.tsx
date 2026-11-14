@@ -131,6 +131,7 @@ export default function TerminalStudioPage() {
   const [code, setCode] = useState(SAMPLE_JS_CODE);
   const [theme, setTheme] = useState<TerminalTheme>('windows-terminal');
   const [screenshotSize, setScreenshotSize] = useState<'small' | 'medium' | 'large' | 'full'>('medium');
+  const [screenshotAlign, setScreenshotAlign] = useState<'left' | 'center' | 'right'>('center');
   const [windowTitle, setWindowTitle] = useState('bash - 80x24');
   const [promptPrefix, setPromptPrefix] = useState('user@assignment:~$');
   const [output, setOutput] = useState(
@@ -194,7 +195,7 @@ export default function TerminalStudioPage() {
     const screenshotDataUrl = generateScreenshotDataUrl();
     const imgId = registerImage(screenshotDataUrl, `Terminal ${language.toUpperCase()} Output`);
     const currentDoc = useEditorStore.getState().content;
-    const snippet = `\n\n**Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**\n\n![Terminal Output|${screenshotSize}](attachment:${imgId})\n`;
+    const snippet = `\n\n**Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**\n\n![Terminal Output|${screenshotSize}|${screenshotAlign}](attachment:${imgId})\n`;
     setContent(currentDoc + snippet);
     router.push('/');
   };
@@ -211,7 +212,7 @@ ${code}
 
 **Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**
 
-![Terminal Output|${screenshotSize}](attachment:${imgId})
+![Terminal Output|${screenshotSize}|${screenshotAlign}](attachment:${imgId})
 
 The program completed execution with status code 0.
 `;
@@ -225,7 +226,7 @@ The program completed execution with status code 0.
   const handleCopyMarkdownTag = () => {
     const screenshotDataUrl = generateScreenshotDataUrl();
     const imgId = registerImage(screenshotDataUrl, `Terminal ${language.toUpperCase()} Output`);
-    navigator.clipboard.writeText(`![Terminal Output|${screenshotSize}](attachment:${imgId})`);
+    navigator.clipboard.writeText(`![Terminal Output|${screenshotSize}|${screenshotAlign}](attachment:${imgId})`);
     setToastMessage('Screenshot code copied! Paste (Ctrl+V) anywhere in your handwritten notes.');
     setIsEmbedMenuOpen(false);
     setTimeout(() => setToastMessage(null), 3500);
@@ -311,31 +312,60 @@ The program completed execution with status code 0.
               </div>
             </div>
 
-            {/* Screenshot Size (Chhota / Bada) */}
-            <div className="pt-2 border-t border-[#E2D8C3]">
-              <span className="text-[#6B7280] font-semibold text-xs block mb-1">
-                Screenshot Size (साइज - छोटा / बड़ा)
-              </span>
-              <div className="grid grid-cols-4 gap-1.5 bg-[#FAF8F5] p-1 border border-[#E2D8C3] rounded-xl text-center">
-                {[
-                  { id: 'small', label: 'Chhota (45%)' },
-                  { id: 'medium', label: 'Medium (70%)' },
-                  { id: 'large', label: 'Bada (88%)' },
-                  { id: 'full', label: 'Full (100%)' },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setScreenshotSize(s.id as any)}
-                    className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all ${
-                      screenshotSize === s.id
-                        ? 'bg-[#1F3A8A] text-white shadow-xs'
-                        : 'text-[#14213D] hover:bg-white'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+            {/* Screenshot Size Controls */}
+            <div className="pt-2 border-t border-[#E2D8C3] space-y-2">
+              <div>
+                <span className="text-[#6B7280] font-semibold text-xs block mb-1">
+                  Screenshot Size
+                </span>
+                <div className="grid grid-cols-4 gap-1.5 bg-[#FAF8F5] p-1 border border-[#E2D8C3] rounded-xl text-center">
+                  {[
+                    { id: 'small', label: 'Small (45%)' },
+                    { id: 'medium', label: 'Medium (70%)' },
+                    { id: 'large', label: 'Large (88%)' },
+                    { id: 'full', label: 'Full (100%)' },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setScreenshotSize(s.id as any)}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all ${
+                        screenshotSize === s.id
+                          ? 'bg-[#1F3A8A] text-white shadow-xs'
+                          : 'text-[#14213D] hover:bg-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Page Alignment: Left, Center (Mid), Right */}
+              <div>
+                <span className="text-[#6B7280] font-semibold text-xs block mb-1">
+                  Image Alignment on Page
+                </span>
+                <div className="grid grid-cols-3 gap-1.5 bg-[#FAF8F5] p-1 border border-[#E2D8C3] rounded-xl text-center">
+                  {[
+                    { id: 'left', label: 'Left' },
+                    { id: 'center', label: 'Center (Mid)' },
+                    { id: 'right', label: 'Right' },
+                  ].map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setScreenshotAlign(a.id as any)}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all ${
+                        screenshotAlign === a.id
+                          ? 'bg-[#1F3A8A] text-white shadow-xs'
+                          : 'text-[#14213D] hover:bg-white'
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

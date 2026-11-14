@@ -84,6 +84,7 @@ export interface MeasuredLine {
   imageUrl?: string;
   imageWidth?: number;
   imageHeight?: number;
+  imageAlign?: 'left' | 'center' | 'right';
 }
 
 export const A4_WIDTH_MM = 210;

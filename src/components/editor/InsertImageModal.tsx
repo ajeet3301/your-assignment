@@ -117,6 +117,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [altText, setAltText] = useState('Execution Screenshot');
   const [imageSize, setImageSize] = useState<'small' | 'medium' | 'large' | 'full'>('medium');
+  const [imageAlign, setImageAlign] = useState<'left' | 'center' | 'right'>('center');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -133,7 +134,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
     });
 
     const imgId = registerImage(dataUrl, command || 'Terminal Output');
-    const markdown = `\n\n![${command || 'Terminal Output'}|${imageSize}](attachment:${imgId})\n\n`;
+    const markdown = `\n\n![${command || 'Terminal Output'}|${imageSize}|${imageAlign}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };
@@ -157,7 +158,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
   const handleInsertUpload = () => {
     if (!imagePreview) return;
     const imgId = registerImage(imagePreview, altText || 'Screenshot');
-    const markdown = `\n\n![${altText || 'Screenshot'}|${imageSize}](attachment:${imgId})\n\n`;
+    const markdown = `\n\n![${altText || 'Screenshot'}|${imageSize}|${imageAlign}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };
@@ -238,6 +239,34 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
                     onChange={(e) => setCommand(e.target.value)}
                     className="w-full p-1.5 border border-[#E2D8C3] rounded-lg text-xs font-mono bg-[#FAF8F5] outline-none"
                     placeholder="python main.py"
+                  />
+                </div>
+              </div>
+
+              {/* Editable Prompt Prefix & Window Title */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">
+                    Prompt Prefix (change user@assignment)
+                  </label>
+                  <input
+                    type="text"
+                    value={promptPrefix}
+                    onChange={(e) => setPromptPrefix(e.target.value)}
+                    className="w-full p-1.5 border border-[#E2D8C3] rounded-lg text-xs font-mono bg-[#FAF8F5] outline-none"
+                    placeholder="user@assignment:~$"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">
+                    Window Title
+                  </label>
+                  <input
+                    type="text"
+                    value={windowTitle}
+                    onChange={(e) => setWindowTitle(e.target.value)}
+                    className="w-full p-1.5 border border-[#E2D8C3] rounded-lg text-xs font-sans bg-[#FAF8F5] outline-none"
+                    placeholder="bash - 80x24"
                   />
                 </div>
               </div>
@@ -347,34 +376,66 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
             </div>
           )}
 
-          {/* Size (छोटा / बड़ा) Selector */}
-          <div className="pt-2 border-t border-[#E2D8C3]">
-            <label className="block text-[11px] font-bold text-[#14213D] mb-1.5">
-              Screenshot Size (छोटा / बड़ा विकल्प):
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { id: 'small', label: 'Chhota (छोटा)', desc: '45% Width' },
-                { id: 'medium', label: 'Medium (सामान्य)', desc: '70% Width' },
-                { id: 'large', label: 'Bada (बड़ा)', desc: '88% Width' },
-                { id: 'full', label: 'Full Page', desc: '100% Width' },
-              ].map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setImageSize(s.id as any)}
-                  className={`py-2 px-2 rounded-xl text-center border transition-all ${
-                    imageSize === s.id
-                      ? 'bg-[#1F3A8A] text-white border-[#1F3A8A] shadow-xs ring-1 ring-[#1F3A8A]'
-                      : 'bg-white hover:bg-[#FAF8F5] text-[#14213D] border-[#E2D8C3]'
-                  }`}
-                >
-                  <div className="text-[11px] font-bold leading-tight">{s.label}</div>
-                  <div className={`text-[10px] ${imageSize === s.id ? 'text-white/80' : 'text-[#6B7280]'}`}>
-                    {s.desc}
-                  </div>
-                </button>
-              ))}
+          {/* Screenshot Size Controls (in clean English) */}
+          <div className="pt-2 border-t border-[#E2D8C3] space-y-3">
+            <div>
+              <label className="block text-[11px] font-bold text-[#14213D] mb-1.5">
+                Screenshot Size:
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { id: 'small', label: 'Small', desc: '45% Width' },
+                  { id: 'medium', label: 'Medium', desc: '70% Width' },
+                  { id: 'large', label: 'Large', desc: '88% Width' },
+                  { id: 'full', label: 'Full Page', desc: '100% Width' },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setImageSize(s.id as any)}
+                    className={`py-2 px-2 rounded-xl text-center border transition-all ${
+                      imageSize === s.id
+                        ? 'bg-[#1F3A8A] text-white border-[#1F3A8A] shadow-xs ring-1 ring-[#1F3A8A]'
+                        : 'bg-white hover:bg-[#FAF8F5] text-[#14213D] border-[#E2D8C3]'
+                    }`}
+                  >
+                    <div className="text-[11px] font-bold leading-tight">{s.label}</div>
+                    <div className={`text-[10px] ${imageSize === s.id ? 'text-white/80' : 'text-[#6B7280]'}`}>
+                      {s.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Image Page Alignment: Left, Center (Mid), Right */}
+            <div>
+              <label className="block text-[11px] font-bold text-[#14213D] mb-1.5">
+                Image Alignment on Page:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'left', label: 'Left', desc: 'Aligns to left margin' },
+                  { id: 'center', label: 'Center (Mid)', desc: 'Centered on page' },
+                  { id: 'right', label: 'Right', desc: 'Aligns to right margin' },
+                ].map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setImageAlign(a.id as any)}
+                    className={`py-2 px-2 rounded-xl text-center border transition-all ${
+                      imageAlign === a.id
+                        ? 'bg-[#1F3A8A] text-white border-[#1F3A8A] shadow-xs ring-1 ring-[#1F3A8A]'
+                        : 'bg-white hover:bg-[#FAF8F5] text-[#14213D] border-[#E2D8C3]'
+                    }`}
+                  >
+                    <div className="text-[11px] font-bold leading-tight">{a.label}</div>
+                    <div className={`text-[10px] ${imageAlign === a.id ? 'text-white/80' : 'text-[#6B7280]'}`}>
+                      {a.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

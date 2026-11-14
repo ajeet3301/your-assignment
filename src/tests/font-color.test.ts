@@ -229,4 +229,30 @@ At extremely high thermodynamic temperatures, quantum effects converge to classi
     expect(smallWidth).toBeLessThan(largeWidth);
     expect(largeWidth).toBeLessThan(fullWidth);
   });
+
+  it('correctly parses image alignment options (left, center, mid, right)', () => {
+    const leftDoc = '![Screenshot|small|left](https://example.com/demo.png)';
+    const midDoc = '![Screenshot|small|mid](https://example.com/demo.png)';
+    const rightDoc = '![Screenshot|small|right](https://example.com/demo.png)';
+
+    const leftPage = calculateDocumentLayout(leftDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+    const midPage = calculateDocumentLayout(midDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+    const rightPage = calculateDocumentLayout(rightDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+
+    expect(leftPage[0].lines[0].imageAlign).toBe('left');
+    expect(midPage[0].lines[0].imageAlign).toBe('center');
+    expect(rightPage[0].lines[0].imageAlign).toBe('right');
+  });
 });
