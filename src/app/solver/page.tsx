@@ -25,7 +25,6 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { TopBar } from '@/components/navigation/TopBar';
-import { SolverSetupCard } from '@/components/solver/SolverSetupCard';
 import { StudentHeaderCard, DEFAULT_STUDENT_HEADER } from '@/components/solver/StudentHeaderCard';
 import { parseQuestionsFromText, ParsedQuestion } from '@/lib/solver/question-parser';
 import { useEditorStore } from '@/lib/store/editor-store';
@@ -80,21 +79,16 @@ export default function SolverPage() {
   const { setContent, setTitle } = useEditorStore();
 
   const [studentHeader, setStudentHeader] = useState<StudentSubmissionHeader>(DEFAULT_STUDENT_HEADER);
-  const [hasKey, setHasKey] = useState(false);
-  const [isManualMode, setIsManualMode] = useState(false);
   const [rawText, setRawText] = useState(SAMPLE_DBMS_ASSIGNMENT);
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [isExecutingAll, setIsExecutingAll] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedKey = localStorage.getItem('yourassignment_user_ai_key');
-      if (savedKey) setHasKey(true);
-    }
     // Auto-extract on initial load
     handleExtractWithText(SAMPLE_DBMS_ASSIGNMENT);
   }, []);
@@ -131,6 +125,62 @@ export default function SolverPage() {
     setQuestions((prev) =>
       prev.map((q) => (q.id === id ? { ...q, explanation } : q))
     );
+  };
+
+  // Generate code/query solution using server-side .env AI key
+  const handleGenerateAnswer = async (q: ParsedQuestion) => {
+    setGeneratingId(q.id);
+    try {
+      const prompt =
+        q.codeLanguage === 'sql' || q.type === 'sql'
+          ? `Provide the standard MySQL query for this question:\n${q.numberLabel}: ${q.text}\nOutput ONLY the query in a sql code block, followed by 1 sentence explanation.`
+          : `Provide the code solution and brief explanation for this assignment question:\n${q.numberLabel}: ${q.text}`;
+
+      const res = await fetch('/api/ai/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an expert programming and database tutor. Provide accurate, working code/queries and concise explanations.',
+            },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.choices?.[0]?.message?.content) {
+        const reply = data.choices[0].message.content;
+        const codeBlockMatch = reply.match(/```(?:sql|python|javascript|cpp)?\n([\s\S]+?)```/i);
+        if (codeBlockMatch) {
+          handleCodeChange(q.id, codeBlockMatch[1].trim());
+        }
+        const textWithoutCode = reply.replace(/```[\s\S]+?```/g, '').trim();
+        if (textWithoutCode) {
+          handleExplanationChange(q.id, textWithoutCode);
+        }
+        setToastMessage(`AI Solution generated for ${q.numberLabel}!`);
+        setTimeout(() => setToastMessage(null), 3000);
+      } else {
+        alert(data.error || 'Failed to generate solution. Check .env file for GROQ_API_KEY.');
+      }
+    } catch (err: any) {
+      alert('Error contacting AI: ' + err.message);
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  // Solve all questions with AI
+  const handleGenerateAll = async () => {
+    setIsGeneratingAll(true);
+    for (let i = 0; i < questions.length; i++) {
+      await handleGenerateAnswer(questions[i]);
+    }
+    setIsGeneratingAll(false);
   };
 
   // Run a single question's SQL or code and generate real screenshot
@@ -311,6 +361,26 @@ export default function SolverPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Solve All with AI */}
+            <button
+              onClick={handleGenerateAll}
+              disabled={isGeneratingAll || questions.length === 0}
+              className="px-3.5 py-2 font-bold text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              title="Generate solutions for all questions using server-side AI (.env)"
+            >
+              {isGeneratingAll ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Solving All with AI...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Solve All with AI</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleExecuteAll}
               disabled={isExecutingAll || questions.length === 0}
@@ -450,14 +520,30 @@ export default function SolverPage() {
                       )}
                     </div>
 
-                    <button
-                      onClick={() => handleExecuteQuestion(q)}
-                      className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors"
-                      title="Run query and capture authentic MySQL console screenshot"
-                    >
-                      <Play className="w-3 h-3 fill-white" />
-                      <span>Run Query</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleGenerateAnswer(q)}
+                        disabled={generatingId === q.id}
+                        className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg shadow-2xs flex items-center gap-1 transition-colors"
+                        title="Generate code or SQL query with AI (.env)"
+                      >
+                        {generatingId === q.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3 text-purple-600" />
+                        )}
+                        <span>Solve with AI</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleExecuteQuestion(q)}
+                        className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors"
+                        title="Run query and capture authentic MySQL console screenshot"
+                      >
+                        <Play className="w-3 h-3 fill-white" />
+                        <span>Run Query</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Question Prompt */}
