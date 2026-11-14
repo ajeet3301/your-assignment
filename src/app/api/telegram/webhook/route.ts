@@ -61,15 +61,84 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Health check & setup info for Telegram webhook
+ * Health check, diagnostic info & 1-Click Setup for Telegram Webhook
  * GET /api/telegram/webhook
+ * GET /api/telegram/webhook?setup=true
  */
-export async function GET() {
-  const enabled = isTelegramBotEnabled();
+export async function GET(req: NextRequest) {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const enabled = Boolean(token);
+
+  if (!enabled) {
+    return NextResponse.json({
+      ok: false,
+      enabled: false,
+      status: 'disabled',
+      reason: 'TELEGRAM_BOT_TOKEN is not set in Vercel Environment Variables. (Remember to Redeploy after adding it).',
+    });
+  }
+
+  const url = new URL(req.url);
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || url.host;
+  const proto = req.headers.get('x-forwarded-proto') || 'https';
+  const autoWebhookUrl = `${proto}://${host}/api/telegram/webhook`;
+
+  // 1-Click Auto Setup: /api/telegram/webhook?setup=true
+  if (url.searchParams.get('setup') === 'true') {
+    try {
+      const setParams = new URLSearchParams({ url: autoWebhookUrl });
+      if (secret) {
+        setParams.append('secret_token', secret);
+      }
+
+      const setRes = await fetch(
+        `https://api.telegram.org/bot${token}/setWebhook?${setParams.toString()}`
+      );
+      const setData = await setRes.json();
+
+      return NextResponse.json({
+        ok: setData.ok,
+        action: 'setWebhook',
+        webhookUrl: autoWebhookUrl,
+        secretProtected: Boolean(secret),
+        telegramResponse: setData,
+        message: setData.ok
+          ? '🎉 Webhook registered successfully with Telegram! Your bot will now reply to messages.'
+          : `❌ Telegram error: ${setData.description}`,
+      });
+    } catch (err: any) {
+      return NextResponse.json(
+        { ok: false, error: 'Failed to contact Telegram API: ' + err.message },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Diagnostic Status Check via getWebhookInfo
+  let webhookInfo: any = null;
+  try {
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    if (infoRes.ok) {
+      webhookInfo = await infoRes.json();
+    }
+  } catch (err: any) {
+    webhookInfo = { error: err.message };
+  }
+
+  const isConfigured = webhookInfo?.result?.url === autoWebhookUrl;
+
   return NextResponse.json({
     ok: true,
-    enabled,
-    status: enabled ? 'active' : 'disabled (TELEGRAM_BOT_TOKEN not configured)',
-    webhookEndpoint: '/api/telegram/webhook',
+    enabled: true,
+    botConfigured: isConfigured,
+    currentHostWebhookUrl: autoWebhookUrl,
+    telegramRegisteredUrl: webhookInfo?.result?.url || 'None (Webhook not linked yet)',
+    lastErrorMessage: webhookInfo?.result?.last_error_message || null,
+    pendingUpdateCount: webhookInfo?.result?.pending_update_count || 0,
+    quickSetupUrl: `${proto}://${host}/api/telegram/webhook?setup=true`,
+    help: !isConfigured
+      ? `Click or open '${proto}://${host}/api/telegram/webhook?setup=true' in your browser to automatically register the webhook!`
+      : 'Webhook is active and connected to Telegram!',
   });
 }
