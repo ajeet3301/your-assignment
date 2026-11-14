@@ -1,5 +1,3 @@
-'use client';
-
 export interface SqlQueryResult {
   columns: string[];
   rows: any[][];
@@ -393,3 +391,4 @@ export class InMemoryMySqlEngine {
 
 // Global in-memory engine singleton for zero-config lab execution
 export const mySqlRunner = new InMemoryMySqlEngine();
+export { InMemoryMySqlEngine as BrowserSqlEngine };

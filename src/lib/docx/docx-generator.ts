@@ -1,5 +1,3 @@
-'use client';
-
 import {
   Document,
   Packer,
@@ -25,6 +23,14 @@ export interface StudentSubmissionHeader {
   subject: string;
   assignmentTitle: string;
 }
+
+export const DEFAULT_STUDENT_HEADER: StudentSubmissionHeader = {
+  studentName: 'Ajeet kumar',
+  rollNo: '255ISC014',
+  className: 'int btech cse',
+  subject: 'Database management lab',
+  assignmentTitle: 'DBMS ASSIGNMENT 2',
+};
 
 export interface SolvedQuestionDocItem {
   id: string;
@@ -58,6 +64,9 @@ export interface GenerateDocxOptions {
  */
 function dataUrlToArrayBuffer(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(',')[1] || dataUrl;
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(base64, 'base64');
+  }
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -68,9 +77,9 @@ function dataUrlToArrayBuffer(dataUrl: string): Uint8Array {
 }
 
 /**
- * Creates a professional Word document (.docx) matching standard student submissions
+ * Builds the docx Document object
  */
-export async function generateAssignmentDocx(options: GenerateDocxOptions): Promise<Blob> {
+export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Document {
   const {
     header,
     questions,
@@ -465,13 +474,30 @@ export async function generateAssignmentDocx(options: GenerateDocxOptions): Prom
     ],
   });
 
+  return doc;
+}
+
+/**
+ * Creates a professional Word document (.docx) as a Blob (browser-friendly)
+ */
+export async function generateAssignmentDocx(options: GenerateDocxOptions): Promise<Blob> {
+  const doc = buildAssignmentDocxDocument(options);
   return await Packer.toBlob(doc);
+}
+
+/**
+ * Creates a professional Word document (.docx) as a Buffer (server & Telegram bot friendly)
+ */
+export async function generateAssignmentDocxBuffer(options: GenerateDocxOptions): Promise<Buffer> {
+  const doc = buildAssignmentDocxDocument(options);
+  return await Packer.toBuffer(doc);
 }
 
 /**
  * Initiates browser download of generated DOCX file
  */
 export function downloadDocxBlob(blob: Blob, filename: string = 'Assignment_Solution.docx') {
+  if (typeof document === 'undefined') return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
