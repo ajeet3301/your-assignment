@@ -26,7 +26,7 @@ export interface ProjectDocument {
     slant: number; // degrees -15 to +15
     inkColor: string;
     penType: 'ballpoint' | 'gel' | 'fountain' | 'pencil' | 'marker';
-    paperStyle: 'plain' | 'ruled-narrow' | 'ruled-medium' | 'ruled-wide' | 'ruled-margin' | 'grid' | 'dotted';
+    paperStyle: 'none' | 'plain' | 'ruled-narrow' | 'ruled-medium' | 'ruled-wide' | 'ruled-margin' | 'grid' | 'dotted';
     paperColor: string;
     margins: {
       top: number; // in mm

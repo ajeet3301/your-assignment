@@ -153,10 +153,12 @@ export function renderHandwrittenPage(options: RenderPageOptions) {
         imageCache.set(resolvedSrc, img);
       }
 
-      const imgX = leftMarginPx;
+      const usableW = width - (settings.margins.left + settings.margins.right) * scaleX;
+      const imgW = line.imageWidth || usableW;
+      const imgH = line.imageHeight || Math.round(imgW * 0.52);
+      // Center-align screenshot nicely between left and right margins
+      const imgX = leftMarginPx + Math.max(0, Math.round((usableW - imgW) / 2));
       const imgY = line.y;
-      const imgW = line.imageWidth || width - leftMarginPx * 2;
-      const imgH = line.imageHeight || Math.round(imgW * 0.48);
 
       ctx.save();
       // Reset compositing from pen's blendMode ('multiply') to normal 'source-over'

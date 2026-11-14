@@ -1,6 +1,7 @@
 export type PenType = 'ballpoint' | 'gel' | 'fountain' | 'pencil' | 'marker';
 
 export type PaperStyle =
+  | 'none'
   | 'plain'
   | 'ruled-narrow'
   | 'ruled-medium'

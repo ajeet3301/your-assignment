@@ -77,6 +77,7 @@ export const SettingsPanel: React.FC = () => {
   ];
 
   const PAPER_STYLES: { style: PaperStyle; label: string }[] = [
+    { style: 'none', label: 'None (Blank / No Lines)' },
     { style: 'ruled-medium', label: 'Ruled Medium (8.5mm)' },
     { style: 'ruled-margin', label: 'Ruled with Red Margin' },
     { style: 'ruled-narrow', label: 'Ruled Narrow (6.5mm)' },

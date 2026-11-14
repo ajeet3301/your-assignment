@@ -116,6 +116,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
   // Upload state
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [altText, setAltText] = useState('Execution Screenshot');
+  const [imageSize, setImageSize] = useState<'small' | 'medium' | 'large' | 'full'>('medium');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -132,7 +133,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
     });
 
     const imgId = registerImage(dataUrl, command || 'Terminal Output');
-    const markdown = `\n\n![${command || 'Terminal Output'}](attachment:${imgId})\n\n`;
+    const markdown = `\n\n![${command || 'Terminal Output'}|${imageSize}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };
@@ -156,7 +157,7 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
   const handleInsertUpload = () => {
     if (!imagePreview) return;
     const imgId = registerImage(imagePreview, altText || 'Screenshot');
-    const markdown = `\n\n![${altText || 'Screenshot'}](attachment:${imgId})\n\n`;
+    const markdown = `\n\n![${altText || 'Screenshot'}|${imageSize}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };
@@ -345,6 +346,37 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Size (छोटा / बड़ा) Selector */}
+          <div className="pt-2 border-t border-[#E2D8C3]">
+            <label className="block text-[11px] font-bold text-[#14213D] mb-1.5">
+              Screenshot Size (छोटा / बड़ा विकल्प):
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { id: 'small', label: 'Chhota (छोटा)', desc: '45% Width' },
+                { id: 'medium', label: 'Medium (सामान्य)', desc: '70% Width' },
+                { id: 'large', label: 'Bada (बड़ा)', desc: '88% Width' },
+                { id: 'full', label: 'Full Page', desc: '100% Width' },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setImageSize(s.id as any)}
+                  className={`py-2 px-2 rounded-xl text-center border transition-all ${
+                    imageSize === s.id
+                      ? 'bg-[#1F3A8A] text-white border-[#1F3A8A] shadow-xs ring-1 ring-[#1F3A8A]'
+                      : 'bg-white hover:bg-[#FAF8F5] text-[#14213D] border-[#E2D8C3]'
+                  }`}
+                >
+                  <div className="text-[11px] font-bold leading-tight">{s.label}</div>
+                  <div className={`text-[10px] ${imageSize === s.id ? 'text-white/80' : 'text-[#6B7280]'}`}>
+                    {s.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="p-2.5 bg-[#FAF8F5] border border-[#E2D8C3] rounded-xl text-[11px] text-[#6B7280] flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-[#1F3A8A] shrink-0 mt-0.5" />

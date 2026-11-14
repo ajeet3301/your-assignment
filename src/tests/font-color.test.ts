@@ -189,4 +189,44 @@ At extremely high thermodynamic temperatures, quantum effects converge to classi
     expect(imgLine).toBeDefined();
     expect(imgLine?.imageUrl).toContain('data:image/png;base64');
   });
+
+  it('supports paperStyle: "none" for completely blank unruled paper', () => {
+    const pages = calculateDocumentLayout('Assignment without ruling lines\nSecond line.', {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: { ...DEFAULT_SETTINGS, paperStyle: 'none' },
+    });
+
+    expect(pages.length).toBeGreaterThan(0);
+    expect(pages[0].lines.length).toBe(2);
+  });
+
+  it('correctly resizes screenshots based on Chhota/Bada/Small/Large options', () => {
+    const smallDoc = '![Screenshot|small](https://example.com/demo.png)';
+    const largeDoc = '![Screenshot|large](https://example.com/demo.png)';
+    const fullDoc = '![Screenshot|full](https://example.com/demo.png)';
+
+    const smallPage = calculateDocumentLayout(smallDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+    const largePage = calculateDocumentLayout(largeDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+    const fullPage = calculateDocumentLayout(fullDoc, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+
+    const smallWidth = smallPage[0].lines[0].imageWidth!;
+    const largeWidth = largePage[0].lines[0].imageWidth!;
+    const fullWidth = fullPage[0].lines[0].imageWidth!;
+
+    expect(smallWidth).toBeLessThan(largeWidth);
+    expect(largeWidth).toBeLessThan(fullWidth);
+  });
 });

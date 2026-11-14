@@ -110,9 +110,9 @@ export function calculateDocumentLayout(
 
   const ruling = getRulingMetrics(canvasWidth, canvasHeight, settings.paperStyle, settings.margins);
 
-  // Line spacing in px: If ruled, snap to ruling. If plain, compute from fontSize & multiplier
+  // Line spacing in px: If ruled, snap to ruling. If plain or none, compute from fontSize & multiplier
   const lineSpacingPx =
-    settings.paperStyle !== 'plain'
+    settings.paperStyle !== 'plain' && settings.paperStyle !== 'none'
       ? ruling.lineSpacingPx
       : settings.fontSize * 1.6 * (canvasWidth / 800);
 
@@ -138,10 +138,39 @@ export function calculateDocumentLayout(
       : null;
 
     if (imageMatch || looseDataUrlMatch) {
-      const rawUrl = imageMatch ? imageMatch[2] : looseDataUrlMatch![1];
+      const alt = imageMatch ? imageMatch[1] : 'Screenshot';
+      let rawUrl = imageMatch ? imageMatch[2] : looseDataUrlMatch![1];
+
+      // Parse size parameter: ![alt|small] or ![alt|chhota] or ![alt|large] or ![alt|bada] or (url =small)
+      let sizeMultiplier = 0.70; // default medium (~70% page width)
+
+      // 1. Check size in alt: e.g. "Terminal|small", "Diagram|chhota", "Screenshot|large", "Screenshot|bada", "Output|full", "Output|50%"
+      const altSizeMatch = alt.match(/\|(small|chhota|tiny|medium|large|bada|big|full|\d+%?)/i);
+      // 2. Or check size in URL: e.g. "attachment:img_1 =small"
+      const urlSizeMatch = rawUrl.match(/\s+=(small|chhota|tiny|medium|large|bada|big|full|\d+%?)/i);
+
+      const sizeToken = (altSizeMatch?.[1] || urlSizeMatch?.[1] || '').toLowerCase();
+      if (urlSizeMatch) {
+        rawUrl = rawUrl.replace(/\s+=.+$/, '').trim();
+      }
+
+      if (sizeToken === 'small' || sizeToken === 'chhota' || sizeToken === 'tiny') {
+        sizeMultiplier = 0.45; // Chhota (Small)
+      } else if (sizeToken === 'large' || sizeToken === 'bada' || sizeToken === 'big') {
+        sizeMultiplier = 0.88; // Bada (Large)
+      } else if (sizeToken === 'full') {
+        sizeMultiplier = 1.0; // Pura width
+      } else if (sizeToken.endsWith('%')) {
+        const pct = parseInt(sizeToken, 10);
+        if (!isNaN(pct)) sizeMultiplier = Math.min(1.0, Math.max(0.2, pct / 100));
+      } else if (/^\d+$/.test(sizeToken)) {
+        const num = parseInt(sizeToken, 10);
+        if (!isNaN(num)) sizeMultiplier = Math.min(1.0, Math.max(0.2, num / 100));
+      }
+
       const resolvedUrl = resolveImageUrl(rawUrl);
-      const imgWidth = Math.min(usableWidth, 620 * (canvasWidth / 800));
-      const imgHeight = Math.round(imgWidth * 0.48);
+      const imgWidth = Math.min(usableWidth, Math.round(usableWidth * sizeMultiplier));
+      const imgHeight = Math.round(imgWidth * 0.52);
 
       if (currentY + imgHeight > maxY && currentLines.length > 0) {
         pages.push({ pageIndex: currentPageIndex, lines: currentLines });
