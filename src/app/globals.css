@@ -62,7 +62,12 @@ body {
   padding: 0 4px;
 }
 
-/* Custom scrollbars for clean notebook editor */
+/* Custom scrollbars for clean notebook editor (Standard CSS + Webkit fallback) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #D3C9AF #F4EEDC;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
