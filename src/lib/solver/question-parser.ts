@@ -6,10 +6,24 @@
 export interface ParsedQuestion {
   id: string;
   numberLabel: string;
+  sectionTitle?: string;
   text: string;
   type: string;
   marks?: number;
   answer?: string;
+  codeSnippet?: string;
+  codeLanguage?: string;
+  outputScreenshotDataUrl?: string;
+  outputText?: string;
+  tableData?: {
+    headers: string[];
+    rows: (string | number)[][];
+    caption?: string;
+  };
+  explanation?: string;
+  timeComplexity?: string;
+  spaceComplexity?: string;
+  isExecuted?: boolean;
 }
 
 export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
@@ -65,10 +79,40 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
 
     // Type detection heuristic
     let detectedType = 'theory';
+    let codeLanguage: string | undefined = undefined;
+    let codeSnippet: string | undefined = undefined;
     const lower = fullChunk.toLowerCase();
-    if (lower.includes('code') || lower.includes('program') || lower.includes('algorithm') || lower.includes('function')) {
+
+    if (
+      lower.includes('select ') ||
+      lower.includes('create table') ||
+      lower.includes('insert into') ||
+      lower.includes('database') ||
+      lower.includes('sql') ||
+      lower.includes('mysql')
+    ) {
+      detectedType = 'sql';
+      codeLanguage = 'sql';
+      const sqlMatch = fullChunk.match(
+        /(SELECT\s+[\s\S]+?;|CREATE\s+TABLE[\s\S]+?;|INSERT\s+INTO[\s\S]+?;|SHOW\s+DATABASES;|USE\s+[a-zA-Z0-9_]+;)/i
+      );
+      if (sqlMatch) {
+        codeSnippet = sqlMatch[1].trim();
+      }
+    } else if (
+      lower.includes('code') ||
+      lower.includes('program') ||
+      lower.includes('algorithm') ||
+      lower.includes('function')
+    ) {
       detectedType = 'programming';
-    } else if (lower.includes('calculate') || lower.includes('derive') || lower.includes('prove') || lower.includes('solve for')) {
+      codeLanguage = lower.includes('python') ? 'python' : 'javascript';
+    } else if (
+      lower.includes('calculate') ||
+      lower.includes('derive') ||
+      lower.includes('prove') ||
+      lower.includes('solve for')
+    ) {
       detectedType = 'numerical';
     }
 
@@ -79,6 +123,8 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
       type: detectedType,
       marks,
       answer: '',
+      codeLanguage,
+      codeSnippet,
     });
   }
 
