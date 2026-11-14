@@ -13,7 +13,6 @@ import {
   WidthType,
   Footer,
   PageNumber,
-  NumberFormat,
 } from 'docx';
 
 export interface StudentSubmissionHeader {
@@ -28,18 +27,21 @@ export const DEFAULT_STUDENT_HEADER: StudentSubmissionHeader = {
   studentName: 'Ajeet kumar',
   rollNo: '255ISC014',
   className: 'int btech cse',
-  subject: 'Database management lab',
-  assignmentTitle: 'DBMS ASSIGNMENT 2',
+  subject: 'Computer Organization and Architecture',
+  assignmentTitle: 'COA ASSIGNMENT 2',
 };
 
 export interface SolvedQuestionDocItem {
   id: string;
   numberLabel: string; // e.g. "Q1" or "Question 1"
-  sectionTitle?: string; // e.g. "A. LIKE Keyword"
+  sectionTitle?: string;
   questionText: string;
+  questionType?: 'theory' | 'numerical' | 'diagram' | 'code' | 'sql' | 'mcq';
+  marks?: number;
+  answer?: string; // Main answer body (theory, numerical steps, MCQ justification)
   codeSnippet?: string; // source code or SQL query
   codeLanguage?: string; // e.g. "sql", "python", "cpp"
-  inputUsed?: string;
+  diagramPngDataUrl?: string; // Rendered diagram PNG Data URL
   outputScreenshotDataUrl?: string; // PNG Data URL of real terminal/mysql output
   outputText?: string;
   tableData?: {
@@ -50,6 +52,7 @@ export interface SolvedQuestionDocItem {
   explanation?: string;
   timeComplexity?: string;
   spaceComplexity?: string;
+  correctOption?: string;
 }
 
 export interface GenerateDocxOptions {
@@ -77,6 +80,90 @@ function dataUrlToArrayBuffer(dataUrl: string): Uint8Array {
 }
 
 /**
+ * Parses inline bold markdown text into docx TextRuns
+ */
+function parseInlineFormatting(text: string, fontFamily: string): TextRun[] {
+  const runs: TextRun[] = [];
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+
+  for (const part of parts) {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      runs.push(
+        new TextRun({
+          text: part.slice(2, -2),
+          bold: true,
+          font: fontFamily,
+          size: 21, // 10.5 pt
+          color: '111827',
+        })
+      );
+    } else if (part) {
+      runs.push(
+        new TextRun({
+          text: part,
+          font: fontFamily,
+          size: 21,
+          color: '374151',
+        })
+      );
+    }
+  }
+
+  return runs.length > 0 ? runs : [new TextRun({ text, font: fontFamily, size: 21 })];
+}
+
+/**
+ * Formats multi-line text into structured paragraphs with bold subheadings and bullets
+ */
+function formatAnswerParagraphs(text: string, fontFamily: string): Paragraph[] {
+  const paragraphs: Paragraph[] = [];
+  const lines = text.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Subheading e.g. **Heading:** or # Heading
+    if (/^\*\*([^*]+)\*\*:?$/.test(line) || /^#{1,4}\s+(.+)$/.test(line)) {
+      const headingText = line.replace(/^[#*]+\s*|\*+:?$/g, '').trim();
+      paragraphs.push(
+        new Paragraph({
+          spacing: { before: 120, after: 40 },
+          children: [
+            new TextRun({
+              text: headingText,
+              bold: true,
+              size: 22, // 11 pt
+              font: fontFamily,
+              color: '1F3A8A',
+            }),
+          ],
+        })
+      );
+    } else if (/^[•\-\*]\s+(.+)$/.test(line)) {
+      // Bullet item
+      const bulletText = line.replace(/^[•\-\*]\s+/, '');
+      paragraphs.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          spacing: { before: 20, after: 20 },
+          children: parseInlineFormatting(bulletText, fontFamily),
+        })
+      );
+    } else {
+      paragraphs.push(
+        new Paragraph({
+          spacing: { before: 40, after: 60 },
+          children: parseInlineFormatting(line, fontFamily),
+        })
+      );
+    }
+  }
+
+  return paragraphs;
+}
+
+/**
  * Builds the docx Document object
  */
 export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Document {
@@ -90,14 +177,13 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
   const docChildren: (Paragraph | Table)[] = [];
 
   // 1. Student Submission Header Block
-  // Style: Bold, student name, roll number, course, subject, assignment title
   docChildren.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 0, after: 120 },
       children: [
         new TextRun({
-          text: header.assignmentTitle.toUpperCase(),
+          text: (header.assignmentTitle || 'ASSIGNMENT SUBMISSION').toUpperCase(),
           bold: true,
           size: 32, // 16 pt
           font: fontFamily,
@@ -111,8 +197,8 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
   const headerDetails = [
     `Name: ${header.studentName || 'Student Name'}`,
     `Roll No: ${header.rollNo || 'N/A'}`,
-    `Class / Branch: ${header.className || 'B.Tech CSE'}`,
-    `Subject: ${header.subject || 'Lab Assignment'}`,
+    `Class: ${header.className || 'B.Tech CSE'}`,
+    `Subject: ${header.subject || 'Assignment'}`,
   ];
 
   docChildren.push(
@@ -173,37 +259,91 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
     }
 
     // Question Label & Text
+    const questionRuns = [
+      new TextRun({
+        text: `${q.numberLabel}. `,
+        bold: true,
+        size: 24, // 12 pt
+        font: fontFamily,
+        color: '111827',
+      }),
+      new TextRun({
+        text: q.questionText,
+        bold: true,
+        size: 24, // 12 pt
+        font: fontFamily,
+        color: '111827',
+      }),
+    ];
+
+    if (q.marks) {
+      questionRuns.push(
+        new TextRun({
+          text: `  [${q.marks} Marks]`,
+          italics: true,
+          size: 20, // 10 pt
+          font: fontFamily,
+          color: '6B7280',
+        })
+      );
+    }
+
     docChildren.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_3,
-        spacing: { before: 180, after: 80 },
-        children: [
-          new TextRun({
-            text: `${q.numberLabel}. `,
-            bold: true,
-            size: 24, // 12 pt
-            font: fontFamily,
-            color: '111827',
-          }),
-          new TextRun({
-            text: q.questionText,
-            bold: true,
-            size: 24, // 12 pt
-            font: fontFamily,
-            color: '111827',
-          }),
-        ],
+        spacing: { before: 200, after: 80 },
+        children: questionRuns,
       })
     );
 
-    // Source Code / Query Block
+    // 2.1 Diagram Question: Render embedded image if provided
+    if (q.diagramPngDataUrl && q.diagramPngDataUrl.startsWith('data:image/')) {
+      try {
+        const imageBytes = dataUrlToArrayBuffer(q.diagramPngDataUrl);
+        docChildren.push(
+          new Paragraph({
+            spacing: { before: 80, after: 40 },
+            children: [
+              new TextRun({
+                text: 'System Diagram / Flowchart:',
+                bold: true,
+                size: 20,
+                font: fontFamily,
+                color: '1F3A8A',
+              }),
+            ],
+          })
+        );
+
+        docChildren.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 40, after: 120 },
+            children: [
+              new ImageRun({
+                data: imageBytes,
+                transformation: {
+                  width: 500,
+                  height: 260,
+                },
+                type: 'png',
+              }),
+            ],
+          })
+        );
+      } catch (err) {
+        console.warn('Failed to embed diagram image in DOCX:', err);
+      }
+    }
+
+    // 2.2 Source Code / SQL Query Block
     if (q.codeSnippet && q.codeSnippet.trim()) {
       docChildren.push(
         new Paragraph({
           spacing: { before: 80, after: 40 },
           children: [
             new TextRun({
-              text: q.codeLanguage?.toLowerCase() === 'sql' ? 'SQL Query:' : 'Source Code:',
+              text: q.codeLanguage?.toLowerCase() === 'sql' ? 'SQL Query:' : `Source Code (${(q.codeLanguage || 'Code').toUpperCase()}):`,
               bold: true,
               size: 20, // 10 pt
               font: fontFamily,
@@ -236,7 +376,7 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
       });
     }
 
-    // Real Execution Screenshot (PNG)
+    // 2.3 Real Execution Screenshot (PNG) - Only if present
     if (q.outputScreenshotDataUrl && q.outputScreenshotDataUrl.startsWith('data:image/')) {
       try {
         const imageBytes = dataUrlToArrayBuffer(q.outputScreenshotDataUrl);
@@ -256,7 +396,6 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
           })
         );
 
-        // Standard A4 width is 8.27 in = 595 pt (~500 pt printable with margins)
         docChildren.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -278,7 +417,7 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
       }
     }
 
-    // Observation Table (if provided)
+    // 2.4 Observation Table (if provided)
     if (q.tableData && q.tableData.rows.length > 0) {
       docChildren.push(
         new Paragraph({
@@ -359,68 +498,65 @@ export function buildAssignmentDocxDocument(options: GenerateDocxOptions): Docum
       );
     }
 
-    // Explanation & Complexity
-    if (includeExplanations && (q.explanation || q.timeComplexity)) {
-      if (q.explanation) {
-        docChildren.push(
-          new Paragraph({
-            spacing: { before: 100, after: 60 },
-            children: [
-              new TextRun({
-                text: 'Explanation: ',
-                bold: true,
-                size: 21,
-                font: fontFamily,
-                color: '1F3A8A',
-              }),
-              new TextRun({
-                text: q.explanation,
-                size: 21,
-                font: fontFamily,
-                color: '374151',
-              }),
-            ],
-          })
-        );
-      }
-
-      if (q.timeComplexity || q.spaceComplexity) {
-        docChildren.push(
-          new Paragraph({
-            spacing: { before: 40, after: 120 },
-            children: [
-              new TextRun({
-                text: `Complexity: Time ${q.timeComplexity || 'O(1)'} | Space ${q.spaceComplexity || 'O(1)'}`,
-                bold: true,
-                size: 20,
-                font: fontFamily,
-                color: '6B7280',
-              }),
-            ],
-          })
-        );
-      }
-    }
-
-    // Separator line between questions
-    if (idx < questions.length - 1) {
+    // 2.5 Main Answer (Theory / Numerical / MCQ)
+    if (q.answer && q.answer.trim()) {
       docChildren.push(
         new Paragraph({
-          spacing: { before: 120, after: 160 },
-          border: {
-            bottom: {
-              color: 'E5E7EB',
-              space: 1,
-              style: BorderStyle.SINGLE,
-              size: 6,
-            },
-          },
+          spacing: { before: 100, after: 40 },
+          children: [
+            new TextRun({
+              text: 'Answer:',
+              bold: true,
+              size: 21,
+              font: fontFamily,
+              color: '1F3A8A',
+            }),
+          ],
         })
       );
+
+      const answerParas = formatAnswerParagraphs(q.answer, fontFamily);
+      docChildren.push(...answerParas);
     }
+
+    // 2.6 Explanation & Notes (if distinct from answer)
+    if (includeExplanations && q.explanation && q.explanation.trim() && q.explanation.trim() !== q.answer?.trim()) {
+      docChildren.push(
+        new Paragraph({
+          spacing: { before: 80, after: 40 },
+          children: [
+            new TextRun({
+              text: 'Explanation / Notes:',
+              bold: true,
+              size: 20,
+              font: fontFamily,
+              color: '4B5563',
+            }),
+          ],
+        })
+      );
+
+      const explanationParas = formatAnswerParagraphs(q.explanation, fontFamily);
+      docChildren.push(...explanationParas);
+    }
+
+    // Spacing between questions
+    docChildren.push(
+      new Paragraph({
+        spacing: { before: 140, after: 140 },
+        border: {
+          bottom: {
+            color: 'E5E7EB',
+            space: 1,
+            style: BorderStyle.SINGLE,
+            size: 6,
+          },
+        },
+      })
+    );
   }
 
-  // 3. Construct Document with standard A4 margins & footer page numbers
+  // 3. Assemble Full Document with Margins and Headers/Footers
   const doc = new Document({
     sections: [
       {
