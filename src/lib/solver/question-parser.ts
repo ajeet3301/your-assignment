@@ -18,15 +18,17 @@ export function parseQuestionsFromText(rawText: string): ParsedQuestion[] {
   // Question regex patterns matching:
   // "Q1.", "Q1:", "Question 1:", "Problem 1:", "1.", "1)", "[1]"
   const questionHeaderRegex =
-    /(?:^|\n)(?:(Q(?:uestion)?\s*\d+[a-z]?[\.:\)]?|Problem\s*\d+[\.:\)]?|\d+[\.:\)])\s*)/gi;
+    /(?:^|\n)\s*(Q(?:uestion)?\s*\d+[a-z]?[\.:\)]?|Problem\s*\d+[\.:\)]?|\d+[\.:\)])\s+/gi;
 
   const matches: { index: number; label: string }[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = questionHeaderRegex.exec(rawText)) !== null) {
+    const label = match[1].trim();
+    const labelPos = match.index + match[0].indexOf(match[1]);
     matches.push({
-      index: match.index,
-      label: match[1].trim(),
+      index: labelPos,
+      label,
     });
   }
 
