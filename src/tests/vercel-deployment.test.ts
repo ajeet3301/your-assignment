@@ -21,7 +21,7 @@ describe('Vercel-Ready Deployment Suite', () => {
     it('validates environment lazily and builds with ZERO environment variables set', () => {
       const env = getServerEnv();
       expect(env).toBeDefined();
-      expect(env.AI_PRIMARY_MODEL).toBe('llama-3.3-70b-versatile');
+      expect(env.AI_PRIMARY_MODEL).toBe('llama-3.1-8b-instant');
       expect(env.NEXT_PUBLIC_APP_URL).toBeDefined();
     });
 

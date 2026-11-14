@@ -9,7 +9,7 @@ const envSchema = z.object({
   // AI Keys & Models
   GROQ_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
-  AI_PRIMARY_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  AI_PRIMARY_MODEL: z.string().default('llama-3.1-8b-instant'),
   AI_VISION_MODEL: z.string().default('google/gemini-2.0-flash-exp:free'),
   AI_FALLBACK_MODELS: z.string().default('meta-llama/llama-3.3-70b-instruct:free'),
 

@@ -20,8 +20,12 @@ export async function solveQuestionWithAi(
   const groqKey = process.env.GROQ_API_KEY?.trim() || '';
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim() || '';
 
-  const activeKey = groqKey && !groqKey.includes('your_groq_api_key') ? groqKey : openRouterKey;
-  const isGroq = activeKey === groqKey;
+  const activeKey =
+    groqKey.startsWith('sk-or-') || openRouterKey.startsWith('sk-or-')
+      ? (groqKey.startsWith('sk-or-') ? groqKey : openRouterKey)
+      : (groqKey && !groqKey.includes('your_groq_api_key') ? groqKey : openRouterKey);
+
+  const isGroq = !activeKey.startsWith('sk-or-') && (activeKey.startsWith('gsk_') || Boolean(groqKey));
 
   const targetLang =
     preferredLanguage && preferredLanguage !== 'auto'
@@ -39,55 +43,60 @@ export async function solveQuestionWithAi(
         ? 'https://api.groq.com/openai/v1/chat/completions'
         : 'https://openrouter.ai/api/v1/chat/completions';
 
-      const model = isGroq ? 'llama-3.3-70b-versatile' : 'google/gemini-2.0-flash-exp:free';
+      const candidateModels = isGroq
+        ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'].filter(Boolean) as string[]
+        : [process.env.AI_PRIMARY_MODEL, 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free'].filter(Boolean) as string[];
 
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${activeKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are an expert university professor and computer science tutor. Always provide correct, compilable code and rigorous answers. Avoid unnecessary pleasantries.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.2,
-        }),
-      });
+      for (const model of Array.from(new Set(candidateModels))) {
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeKey}`,
+            ...(!isGroq ? { 'HTTP-Referer': 'https://yourassignment.app' } : {}),
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are an expert university professor and computer science tutor. Always provide correct, compilable code and rigorous answers. Avoid unnecessary pleasantries.',
+              },
+              { role: 'user', content: prompt },
+            ],
+            temperature: 0.2,
+          }),
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const content: string = data.choices?.[0]?.message?.content || '';
+        if (res.ok) {
+          const data = await res.json();
+          const content: string = data.choices?.[0]?.message?.content || '';
 
-        if (mode === 'theory') {
+          if (mode === 'theory') {
+            return {
+              explanation: content.trim(),
+              theoryAnswer: content.trim(),
+            };
+          }
+
+          // Code block extraction
+          const codeBlockMatch = content.match(/```(?:[a-zA-Z0-9_\-+]+)?\n([\s\S]+?)```/);
+          const codeSnippet = codeBlockMatch ? codeBlockMatch[1].trim() : '';
+          const explanation = content.replace(/```[\s\S]+?```/g, '').trim();
+
+          // Complexity extraction
+          const tcMatch = content.match(/time\s*complexity\s*[:\-]?\s*([O0]\([^\)]+\)|[^\n\.]+)/i);
+          const scMatch = content.match(/space\s*complexity\s*[:\-]?\s*([O0]\([^\)]+\)|[^\n\.]+)/i);
+
           return {
-            explanation: content.trim(),
-            theoryAnswer: content.trim(),
+            codeSnippet: codeSnippet || generateFallbackCode(question, targetLang),
+            codeLanguage: targetLang,
+            explanation: explanation || 'Standard algorithmic implementation.',
+            timeComplexity: tcMatch ? tcMatch[1].trim() : 'O(N)',
+            spaceComplexity: scMatch ? scMatch[1].trim() : 'O(1)',
           };
         }
-
-        // Code block extraction
-        const codeBlockMatch = content.match(/```(?:[a-zA-Z0-9_\-+]+)?\n([\s\S]+?)```/);
-        const codeSnippet = codeBlockMatch ? codeBlockMatch[1].trim() : '';
-        const explanation = content.replace(/```[\s\S]+?```/g, '').trim();
-
-        // Complexity extraction
-        const tcMatch = content.match(/time\s*complexity\s*[:\-]?\s*([O0]\([^\)]+\)|[^\n\.]+)/i);
-        const scMatch = content.match(/space\s*complexity\s*[:\-]?\s*([O0]\([^\)]+\)|[^\n\.]+)/i);
-
-        return {
-          codeSnippet: codeSnippet || generateFallbackCode(question, targetLang),
-          codeLanguage: targetLang,
-          explanation: explanation || 'Standard algorithmic implementation.',
-          timeComplexity: tcMatch ? tcMatch[1].trim() : 'O(N)',
-          spaceComplexity: scMatch ? scMatch[1].trim() : 'O(1)',
-        };
       }
     } catch (err) {
       console.error('AI Solver query error, falling back to deterministic template:', err);
@@ -113,40 +122,46 @@ export async function autoFixCodeWithAi(
   if (!activeKey) return code;
 
   try {
-    const isGroq = activeKey === groqKey;
+    const isGroq = !activeKey.startsWith('sk-or-') && (activeKey.startsWith('gsk_') || Boolean(groqKey));
     const targetUrl = isGroq
       ? 'https://api.groq.com/openai/v1/chat/completions'
       : 'https://openrouter.ai/api/v1/chat/completions';
-    const model = isGroq ? 'llama-3.3-70b-versatile' : 'google/gemini-2.0-flash-exp:free';
 
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${activeKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are an expert debugging assistant. Fix the compile/runtime error in the provided code. Output ONLY the fixed code inside a markdown code block.',
-          },
-          {
-            role: 'user',
-            content: `The following ${language} code failed with this error:\n${errorMessage}\n\nOriginal Code:\n\`\`\`${language}\n${code}\n\`\`\`\n\nPlease provide the corrected code.`,
-          },
-        ],
-        temperature: 0.1,
-      }),
-    });
+    const candidateModels = isGroq
+      ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'].filter(Boolean) as string[]
+      : [process.env.AI_PRIMARY_MODEL, 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free'].filter(Boolean) as string[];
 
-    if (res.ok) {
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content || '';
-      const match = content.match(/```(?:[a-zA-Z0-9_\-+]+)?\n([\s\S]+?)```/);
-      if (match) return match[1].trim();
+    for (const model of Array.from(new Set(candidateModels))) {
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeKey}`,
+          ...(!isGroq ? { 'HTTP-Referer': 'https://yourassignment.app' } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an expert debugging assistant. Fix the compile/runtime error in the provided code. Output ONLY the fixed code inside a markdown code block.',
+            },
+            {
+              role: 'user',
+              content: `The following ${language} code failed with this error:\n${errorMessage}\n\nOriginal Code:\n\`\`\`${language}\n${code}\n\`\`\`\n\nPlease provide the corrected code.`,
+            },
+          ],
+          temperature: 0.1,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        const match = content.match(/```(?:[a-zA-Z0-9_\-+]+)?\n([\s\S]+?)```/);
+        if (match) return match[1].trim();
+      }
     }
   } catch (err) {
     console.error('Auto-fix request failed:', err);
