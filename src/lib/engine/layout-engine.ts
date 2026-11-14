@@ -130,6 +130,35 @@ export function calculateDocumentLayout(
   for (let pIdx = 0; pIdx < rawParagraphs.length; pIdx++) {
     const paragraph = rawParagraphs[pIdx];
 
+    // Image Block Check: ![alt](url)
+    const imageMatch = paragraph.trim().match(/^!\[([^\]]*)\]\((.+)\)$/);
+    if (imageMatch) {
+      const imgWidth = Math.min(usableWidth, 620 * (canvasWidth / 800));
+      const imgHeight = Math.round(imgWidth * 0.48);
+
+      if (currentY + imgHeight > maxY && currentLines.length > 0) {
+        pages.push({ pageIndex: currentPageIndex, lines: currentLines });
+        currentPageIndex++;
+        currentLines = [];
+        currentY = startY;
+      }
+
+      currentLines.push({
+        text: paragraph.trim(),
+        spans: [],
+        glyphs: [],
+        y: currentY,
+        height: imgHeight,
+        isImage: true,
+        imageUrl: imageMatch[2],
+        imageWidth: imgWidth,
+        imageHeight: imgHeight,
+      });
+
+      currentY += imgHeight + lineSpacingPx;
+      continue;
+    }
+
     let isHeading = false;
     let headingLevel = 0;
     let textToWrap = paragraph;

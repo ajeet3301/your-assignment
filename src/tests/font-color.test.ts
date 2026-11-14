@@ -117,4 +117,46 @@ At extremely high thermodynamic temperatures, quantum effects converge to classi
       expect(font.licenseUrl.trim().length).toBeGreaterThan(0);
     }
   });
+
+  it('headingColor correctly applies to headings while body text retains inkColor', () => {
+    const docWithHeadings = `# Main Assignment Title\n## Section 1\nThis is normal body text.`;
+    const settingsWithHeadingColor = {
+      ...DEFAULT_SETTINGS,
+      inkColor: '#1B3FA0',
+      headingColor: '#E5484D',
+    };
+
+    const pages = calculateDocumentLayout(docWithHeadings, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: settingsWithHeadingColor,
+    });
+
+    expect(pages.length).toBeGreaterThan(0);
+    const headingLines = pages[0].lines.filter((l) => l.isHeading);
+    const bodyLines = pages[0].lines.filter((l) => !l.isHeading && !l.isImage);
+
+    expect(headingLines.length).toBeGreaterThanOrEqual(2);
+    expect(bodyLines.length).toBeGreaterThanOrEqual(1);
+
+    // Heading lines should use headingColor
+    expect(headingLines[0].spans[0].color).toBe('#E5484D');
+    // Body lines should use inkColor
+    expect(bodyLines[0].spans[0].color).toBe('#1B3FA0');
+  });
+
+  it('layout engine parses embedded terminal screenshot markdown into isImage line', () => {
+    const docWithScreenshot = `Problem Statement\n\n![Terminal Output](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==)\n\nConclusion`;
+    const pages = calculateDocumentLayout(docWithScreenshot, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+
+    expect(pages.length).toBeGreaterThan(0);
+    const imageLine = pages[0].lines.find((l) => l.isImage);
+    expect(imageLine).toBeDefined();
+    expect(imageLine?.imageUrl).toContain('data:image/png;base64');
+    expect(imageLine?.height).toBeGreaterThan(50);
+  });
 });

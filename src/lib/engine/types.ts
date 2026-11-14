@@ -79,6 +79,10 @@ export interface MeasuredLine {
   height: number;
   isHeading?: boolean;
   headingLevel?: number;
+  isImage?: boolean;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 export const A4_WIDTH_MM = 210;

@@ -64,6 +64,8 @@ function drawWobblyLine(
   ctx.stroke();
 }
 
+const imageCache = new Map<string, HTMLImageElement>();
+
 /**
  * Checks if a font family is cursive / joined
  */
@@ -89,14 +91,15 @@ function isCursiveFont(family: string): boolean {
 /**
  * Renders a single handwritten page onto a canvas with realism physics
  */
-export function renderHandwrittenPage({
-  canvas,
-  page,
-  totalPages,
-  settings,
-  dpi = PREVIEW_SCALE_DPI,
-  hoverFontFamily,
-}: RenderPageOptions) {
+export function renderHandwrittenPage(options: RenderPageOptions) {
+  const {
+    canvas,
+    page,
+    totalPages,
+    settings,
+    dpi = PREVIEW_SCALE_DPI,
+    hoverFontFamily,
+  } = options;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -134,6 +137,48 @@ export function renderHandwrittenPage({
   // 2. Render each line
   for (let lineIdx = 0; lineIdx < page.lines.length; lineIdx++) {
     const line = page.lines[lineIdx];
+
+    // Image Block (e.g. Terminal Screenshot or Diagram)
+    if (line.isImage && line.imageUrl) {
+      let img = imageCache.get(line.imageUrl);
+      if (!img) {
+        img = new Image();
+        img.onload = () => {
+          // Re-render once image is loaded into memory
+          renderHandwrittenPage(options);
+        };
+        img.src = line.imageUrl;
+        imageCache.set(line.imageUrl, img);
+      }
+
+      const imgX = leftMarginPx;
+      const imgY = line.y;
+      const imgW = line.imageWidth || width - leftMarginPx * 2;
+      const imgH = line.imageHeight || Math.round(imgW * 0.48);
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+      ctx.shadowBlur = 10 * scale;
+      ctx.shadowOffsetY = 4 * scale;
+
+      // Draw rounded container & image
+      ctx.beginPath();
+      ctx.roundRect(imgX, imgY, imgW, imgH, 8 * scale);
+      ctx.fillStyle = '#0C0C0C';
+      ctx.fill();
+
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(imgX, imgY, imgW, imgH, 8 * scale);
+        ctx.clip();
+        ctx.drawImage(img, imgX, imgY, imgW, imgH);
+        ctx.restore();
+      }
+
+      ctx.restore();
+      continue;
+    }
 
     const pageProgression = line.y / height; // 0 to 1
     const fatigueMultiplier = settings.fatigue ? 1.0 + pageProgression * 0.4 : 1.0;
