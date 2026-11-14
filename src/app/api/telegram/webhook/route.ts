@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTelegramBot, isTelegramBotEnabled } from '@/lib/telegram/bot';
+import { waitUntil } from '@vercel/functions';
 
 /**
  * Telegram Webhook Route Handler
@@ -42,11 +43,12 @@ export async function POST(req: NextRequest) {
 
     const update = await req.json();
 
-    // Process update asynchronously without blocking webhook acknowledgement
-    // This ensures Telegram gets response in < 3 seconds even during long AI generation
-    bot.handleUpdate(update).catch((err) => {
-      console.error('Error handling Telegram update:', err);
-    });
+    // Process update in background using Vercel waitUntil without blocking the 3s response
+    waitUntil(
+      bot.handleUpdate(update).catch((err) => {
+        console.error('Error handling Telegram update:', err);
+      })
+    );
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

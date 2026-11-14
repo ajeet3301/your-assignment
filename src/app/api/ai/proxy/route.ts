@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { serverlessRateLimit } from '@/lib/storage/redis-client';
 
 /**
  * Server-side AI Proxy
@@ -7,6 +8,15 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || 'local';
+    const rate = await serverlessRateLimit(`ai:${ip}`, 30, 60);
+    if (!rate.success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please wait a minute before making more requests.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { model, messages, temperature = 0.3 } = body;
 
