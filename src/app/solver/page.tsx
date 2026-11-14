@@ -44,6 +44,7 @@ import {
 } from '@/lib/solver/question-parser';
 import { extractTextFromFile } from '@/lib/solver/file-extractor';
 import { MermaidViewer } from '@/components/solver/MermaidViewer';
+import { sanitizeMermaidCode } from '@/lib/solver/mermaid-sanitizer';
 import { useEditorStore } from '@/lib/store/editor-store';
 import {
   generateAssignmentDocx,
@@ -304,9 +305,10 @@ export default function SolverPage() {
       case 'diagram':
         return (
           `${baseContext}\n` +
-          `Task: Provide a clear, valid Mermaid diagram representing this system, architecture, or flowchart.\n` +
+          `Task: Provide a clear, syntactically valid Mermaid diagram representing this system, architecture, or flowchart.\n` +
           `1. Output a valid \`\`\`mermaid code block using flowchart TD, graph LR, or sequenceDiagram.\n` +
-          `2. Below the diagram, write a concise 2-4 sentence explanation describing the components and flow.`
+          `2. IMPORTANT SYNTAX RULES: Always enclose node labels in double quotes like NodeId["Label text"]. Never put unquoted brackets or parentheses inside labels (e.g., write M(AR), NOT M[AR]). Use standard ASCII arrows (-->).\n` +
+          `3. Below the diagram, write a concise 2-4 sentence explanation describing the components and flow.`
         );
 
       case 'numerical':
@@ -381,7 +383,7 @@ export default function SolverPage() {
         if (q.type === 'diagram') {
           const mermaidMatch = reply.match(/```mermaid\n([\s\S]+?)```/i);
           if (mermaidMatch) {
-            handleDiagramChange(q.id, mermaidMatch[1].trim());
+            handleDiagramChange(q.id, sanitizeMermaidCode(mermaidMatch[1].trim()));
           }
           const textWithoutDiagram = reply.replace(/```mermaid[\s\S]+?```/i, '').trim();
           handleAnswerChange(q.id, textWithoutDiagram || 'Diagram rendered above.');

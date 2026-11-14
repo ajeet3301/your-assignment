@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Code2,
   RefreshCw,
-  Download,
-  Eye,
   AlertCircle,
   Sparkles,
   ChevronDown,
   ChevronUp,
+  CheckCircle2,
 } from 'lucide-react';
+import { sanitizeMermaidCode, generateFallbackFlowchartSvg } from '@/lib/solver/mermaid-sanitizer';
 
 interface MermaidViewerProps {
   id: string;
@@ -31,16 +31,61 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [currentCode, setCurrentCode] = useState(code);
+  const [isFallback, setIsFallback] = useState(false);
 
   useEffect(() => {
     setCurrentCode(code);
     renderDiagram(code);
   }, [code]);
 
+  const convertSvgToPng = (svgText: string) => {
+    if (typeof window === 'undefined') {
+      onSvgRendered?.(svgText);
+      return;
+    }
+
+    try {
+      const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = 2; // High-DPI export
+        const w = Math.max(img.width || 640, 640);
+        const h = Math.max(img.height || 360, 360);
+        canvas.width = w * scale;
+        canvas.height = h * scale;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(scale, scale);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const pngDataUrl = canvas.toDataURL('image/png');
+          onSvgRendered?.(svgText, pngDataUrl);
+        }
+        URL.revokeObjectURL(url);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        onSvgRendered?.(svgText);
+      };
+
+      img.src = url;
+    } catch {
+      onSvgRendered?.(svgText);
+    }
+  };
+
   const renderDiagram = async (chartCode: string) => {
     if (!chartCode.trim()) return;
     setIsRendering(true);
     setRenderError(null);
+    setIsFallback(false);
+
+    const sanitized = sanitizeMermaidCode(chartCode);
 
     try {
       const mermaidModule = await import('mermaid');
@@ -54,56 +99,25 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
       });
 
       const uniqueId = `mermaid_${id.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
-      const { svg } = await mermaid.render(uniqueId, chartCode);
+      const { svg } = await mermaid.render(uniqueId, sanitized);
       setSvgContent(svg);
-
-      // Convert SVG to PNG Data URL for Word DOCX export
-      if (typeof window !== 'undefined') {
-        try {
-          const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-          const url = URL.createObjectURL(svgBlob);
-          const img = new Image();
-
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const scale = 2; // High-DPI export
-            const w = Math.max(img.width || 600, 600);
-            const h = Math.max(img.height || 350, 350);
-            canvas.width = w * scale;
-            canvas.height = h * scale;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.scale(scale, scale);
-              ctx.fillStyle = '#FFFFFF';
-              ctx.fillRect(0, 0, w, h);
-              ctx.drawImage(img, 0, 0, w, h);
-              const pngDataUrl = canvas.toDataURL('image/png');
-              onSvgRendered?.(svg, pngDataUrl);
-            }
-            URL.revokeObjectURL(url);
-          };
-
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            onSvgRendered?.(svg);
-          };
-
-          img.src = url;
-        } catch {
-          onSvgRendered?.(svg);
-        }
-      }
+      convertSvgToPng(svg);
     } catch (err: any) {
-      console.warn('Mermaid rendering failed:', err);
-      setRenderError(err.message || 'Syntax error in Mermaid diagram code');
+      console.warn('Mermaid rendering failed, using fallback SVG:', err);
+      const fallbackSvg = generateFallbackFlowchartSvg(chartCode, err.message);
+      setSvgContent(fallbackSvg);
+      setIsFallback(true);
+      convertSvgToPng(fallbackSvg);
     } finally {
       setIsRendering(false);
     }
   };
 
   const handleApplyCode = () => {
-    onChangeCode(currentCode);
-    renderDiagram(currentCode);
+    const cleanCode = sanitizeMermaidCode(currentCode);
+    setCurrentCode(cleanCode);
+    onChangeCode(cleanCode);
+    renderDiagram(cleanCode);
   };
 
   return (
@@ -127,6 +141,23 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Fallback Notice Bar */}
+      {isFallback && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Diagram auto-recovered & rendered as structured flowchart.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditorOpen(true)}
+            className="font-bold underline text-amber-900 text-[10px] ml-2"
+          >
+            Edit Syntax
+          </button>
+        </div>
+      )}
 
       {/* Rendered SVG Viewport */}
       <div className="p-4 bg-white flex items-center justify-center min-h-[180px] overflow-x-auto">
@@ -157,7 +188,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
         <div className="p-3 bg-[#FAF8F5] border-t border-[#E2D8C3] space-y-2">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#6B7280]">
             <span>Mermaid.js Code:</span>
-            <span className="text-[10px]">Supports flowchart, graph, sequenceDiagram, classDiagram</span>
+            <span className="text-[10px]">Auto-sanitizes unquoted brackets, arrows, and special chars</span>
           </div>
 
           <textarea
@@ -177,7 +208,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               className="px-3 py-1 bg-[#1F3A8A] hover:bg-[#1A3175] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors"
             >
               <RefreshCw className={`w-3 h-3 ${isRendering ? 'animate-spin' : ''}`} />
-              <span>Re-render Diagram</span>
+              <span>Clean & Re-render Diagram</span>
             </button>
           </div>
         </div>

@@ -4,6 +4,10 @@ import {
   extractMetadataFromText,
   detectQuestionType,
 } from '../lib/solver/question-parser';
+import {
+  sanitizeMermaidCode,
+  generateFallbackFlowchartSvg,
+} from '../lib/solver/mermaid-sanitizer';
 
 describe('Multi-Subject Assignment Solver Suite', () => {
   const SAMPLE_COA_SHEET = `
@@ -100,5 +104,37 @@ Q1. Which of the following registers holds the address of the next instruction?
     const questions = parseQuestionsFromText(mcqSheet);
     expect(questions).toHaveLength(1);
     expect(questions[0].type).toBe('mcq');
+  });
+
+  it('sanitizes and fixes unquoted node labels with inner brackets (M[AR]) and special characters', () => {
+    const brokenMermaid = `
+flowchart TD
+  Fetch[Fetch: AR <- PC, IR <- M[AR]] --> Decode
+  Decode --> T1[ T1: Memory Read (M[MAR]) → MBR ]
+  T1 --> |Signals| DP[Data Path (ALU, Registers, Bus)]
+    `.trim();
+
+    const sanitized = sanitizeMermaidCode(brokenMermaid);
+
+    // Inner brackets in M[AR] and M[MAR] must be safely transformed or quoted
+    expect(sanitized).not.toContain('M[AR]]');
+    expect(sanitized).not.toContain('M[MAR])');
+    expect(sanitized).toContain('Fetch["Fetch: AR <- PC, IR <- M(AR)"]');
+    expect(sanitized).toContain('T1["T1: Memory Read (M(MAR)) -> MBR"]');
+    expect(sanitized).toContain('DP["Data Path (ALU, Registers, Bus)"]');
+    // Unicode arrow replaced
+    expect(sanitized).not.toContain('→');
+  });
+
+  it('generates fallback SVG flowchart when mermaid code cannot be parsed', () => {
+    const raw = `
+Step 1: Fetch instruction
+Step 2: Decode instruction
+Step 3: Execute in ALU
+    `;
+    const svg = generateFallbackFlowchartSvg(raw);
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('Fetch instruction');
+    expect(svg).toContain('Decode instruction');
   });
 });
