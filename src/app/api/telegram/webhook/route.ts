@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   // 3. Process Telegram update
   try {
-    const bot = getTelegramBot();
+    const bot = await getTelegramBot();
     if (!bot) {
       return NextResponse.json(
         { ok: true, status: 'disabled' },
@@ -43,12 +43,8 @@ export async function POST(req: NextRequest) {
 
     const update = await req.json();
 
-    // Process update in background using Vercel waitUntil without blocking the 3s response
-    waitUntil(
-      bot.handleUpdate(update).catch((err) => {
-        console.error('Error handling Telegram update:', err);
-      })
-    );
+    // Await handleUpdate so message dispatch finishes reliably before function suspension
+    await bot.handleUpdate(update);
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

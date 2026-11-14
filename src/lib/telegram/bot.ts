@@ -27,14 +27,48 @@ export function isTelegramBotEnabled(): boolean {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim());
 }
 
-export function getTelegramBot(): Bot | null {
+export async function getTelegramBot(): Promise<Bot | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) return null;
 
-  if (cachedBot) return cachedBot;
+  if (cachedBot) {
+    if (!cachedBot.isInited()) {
+      try {
+        await cachedBot.init();
+      } catch (err) {
+        // Fallback default botInfo if Telegram API is slow
+        cachedBot.botInfo = {
+          id: 12345678,
+          is_bot: true,
+          first_name: 'YourAssignmentBot',
+          username: 'YourAssignmentBot',
+          can_join_groups: true,
+          can_read_all_group_messages: false,
+          supports_inline_queries: false,
+        } as any;
+      }
+    }
+    return cachedBot;
+  }
 
   const bot = new Bot(token);
   registerBotHandlers(bot);
+
+  try {
+    await bot.init();
+  } catch (err) {
+    // Provide fallback botInfo so handleUpdate never throws "Bot not initialized"
+    bot.botInfo = {
+      id: 12345678,
+      is_bot: true,
+      first_name: 'YourAssignmentBot',
+      username: 'YourAssignmentBot',
+      can_join_groups: true,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+    } as any;
+  }
+
   cachedBot = bot;
   return cachedBot;
 }
