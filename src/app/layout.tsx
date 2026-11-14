@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { Inter, Lora, Caveat } from 'next/font/google';
-import { GOOGLE_FONTS_URL } from '@/lib/engine/fonts';
+import { Inter } from 'next/font/google';
+import { ALL_GOOGLE_FONTS_URL } from '@/lib/engine/fonts';
 import './globals.css';
 
 const inter = Inter({
@@ -8,27 +8,10 @@ const inter = Inter({
   subsets: ['latin'],
 });
 
-const lora = Lora({
-  variable: '--font-serif',
-  subsets: ['latin'],
-});
-
-const caveat = Caveat({
-  variable: '--font-caveat',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
-  title: 'YourAssignment — Realistic Handwriting Generator & AI Assignment Solver',
+  title: 'YourAssignment — Realistic Handwriting Generator',
   description:
-    'Turn typed assignments into ultra-realistic handwritten A4 notebook pages. Deterministic rule-based handwriting engine with pen physics and paper styles.',
-  keywords: [
-    'handwriting generator',
-    'assignment solver',
-    'handwritten notes',
-    'A4 pdf export',
-    'realistic handwriting',
-  ],
+    'Turn typed assignments into realistic handwritten A4 notebook pages. 50+ free handwriting fonts, ruled notebook paper, pen physics, and print-ready 300 DPI PDF export. Free, unlimited, zero-config.',
 };
 
 export default function RootLayout({
@@ -37,16 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${lora.variable} ${caveat.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
+        <link rel="stylesheet" href={ALL_GOOGLE_FONTS_URL} />
       </head>
-      <body className="min-h-full flex flex-col bg-[#FBF7EE] text-[#14213D] selection:bg-[#FFE066] selection:text-[#14213D]">
+      <body className="min-h-full flex flex-col bg-[#FBF7EE] text-[#14213D] font-sans antialiased">
         {children}
       </body>
     </html>

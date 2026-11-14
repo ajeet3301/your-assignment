@@ -17,6 +17,7 @@ import {
   Settings,
   Code2,
 } from 'lucide-react';
+import { TopBar } from '@/components/navigation/TopBar';
 import { SolverSetupCard } from '@/components/solver/SolverSetupCard';
 import { parseQuestionsFromText, ParsedQuestion } from '@/lib/solver/question-parser';
 import { useEditorStore } from '@/lib/store/editor-store';
@@ -125,47 +126,12 @@ export default function SolverPage() {
 
     setTitle('AI Solved Assignment');
     setContent(documentMarkdown || rawText);
-    router.push('/editor');
+    router.push('/');
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF7EE] text-[#14213D] select-none">
-      {/* Top Bar */}
-      <header className="h-14 bg-white border-b border-[#E2D8C3] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="p-1.5 text-[#14213D] hover:bg-[#F4EEDC] rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold"
-          >
-            <ArrowLeft className="w-4 h-4 text-[#1F3A8A]" />
-            <span>Dashboard</span>
-          </Link>
-          <span className="text-[#D5C9B0]">/</span>
-          <div className="flex items-center gap-1.5">
-            <Cpu className="w-4 h-4 text-[#1F3A8A]" />
-            <span className="text-sm font-bold text-[#14213D]">Assignment Solver</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {hasKey && (
-            <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Free Key Connected</span>
-            </span>
-          )}
-          <button
-            onClick={() => {
-              setHasKey(false);
-              setIsManualMode(false);
-            }}
-            className="p-1.5 text-[#6B7280] hover:text-[#14213D] hover:bg-[#F4EEDC] rounded-lg"
-            title="Configure Provider Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+      <TopBar />
 
       {/* Main Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-6">

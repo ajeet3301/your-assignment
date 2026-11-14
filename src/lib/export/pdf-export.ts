@@ -17,7 +17,7 @@ export async function generateHandwrittenPdf({
   pages,
   settings,
   documentTitle = 'Handwritten-Assignment',
-  hasWatermark = true,
+  hasWatermark = false,
   onProgress,
 }: ExportPdfOptions): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -48,21 +48,8 @@ export async function generateHandwrittenPdf({
       dpi: 300,
     });
 
-    // Optional free watermark in footer
-    if (hasWatermark) {
-      const ctx = offscreenCanvas.getContext('2d');
-      if (ctx) {
-        ctx.save();
-        ctx.font = '600 42px sans-serif';
-        ctx.fillStyle = 'rgba(31, 58, 138, 0.45)'; // ink-blue watermark
-        ctx.textAlign = 'center';
-        ctx.fillText('Generated with YourAssignment (Free Plan)', A4_WIDTH_300DPI / 2, A4_HEIGHT_300DPI - 80);
-        ctx.restore();
-      }
-    }
-
-    // Convert to high-quality JPEG image data URL (quality 0.92 balances file size and sharpness)
-    const imgDataUrl = offscreenCanvas.toDataURL('image/jpeg', 0.92);
+    // Convert to high-quality JPEG image data URL (quality 0.94 balances file size and sharpness)
+    const imgDataUrl = offscreenCanvas.toDataURL('image/jpeg', 0.94);
     const imgBytes = await fetch(imgDataUrl).then((res) => res.arrayBuffer());
 
     const pdfImage = await pdfDoc.embedJpg(imgBytes);

@@ -94,28 +94,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
               <ShieldCheck className="w-4 h-4 text-[#1F3A8A]" />
               <div className="text-xs">
                 <span className="font-semibold text-[#1F3A8A]">A4 300 DPI Print Quality</span>
-                <p className="text-[#4B5563] text-[11px]">Exact 2480 × 3508 px canvas rendering</p>
+                <p className="text-[#4B5563] text-[11px]">2480 × 3508 px · Vector-Grade · No Watermark</p>
               </div>
             </div>
             <span className="text-[10px] font-bold bg-[#1F3A8A] text-white px-2 py-0.5 rounded-full">
-              PDF-LIB
+              FREE & UNLIMITED
             </span>
-          </div>
-
-          {/* Watermark toggle */}
-          <div className="flex items-center justify-between p-3 border border-[#E2D8C3] rounded-xl bg-[#FAF8F5]">
-            <div>
-              <div className="text-xs font-semibold text-[#14213D]">Footer Watermark</div>
-              <div className="text-[11px] text-[#6B7280]">
-                Small footer text (Free tier preview)
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={includeWatermark}
-              onChange={(e) => setIncludeWatermark(e.target.checked)}
-              className="w-4 h-4 accent-[#1F3A8A] cursor-pointer"
-            />
           </div>
 
           {/* Export Progress */}

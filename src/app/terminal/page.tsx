@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { runJavaScriptInBrowser, runPythonInBrowser, ExecutionResult } from '@/lib/code/browser-runner';
 import { useEditorStore } from '@/lib/store/editor-store';
+import { TopBar } from '@/components/navigation/TopBar';
 
 export type TerminalTheme =
   | 'windows-terminal'
@@ -183,38 +184,14 @@ ${output}
 `;
     setTitle(`Coding Solution (${language})`);
     setContent(formattedBlock);
-    router.push('/editor');
+    router.push('/');
   };
 
   const currentTheme = TERMINAL_THEMES[theme];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF7EE] text-[#14213D] select-none">
-      {/* Top Navbar */}
-      <header className="h-14 bg-white border-b border-[#E2D8C3] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="p-1.5 text-[#14213D] hover:bg-[#F4EEDC] rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold"
-          >
-            <ArrowLeft className="w-4 h-4 text-[#1F3A8A]" />
-            <span>Dashboard</span>
-          </Link>
-          <span className="text-[#D5C9B0]">/</span>
-          <div className="flex items-center gap-1.5">
-            <Terminal className="w-4 h-4 text-[#1F3A8A]" />
-            <span className="text-sm font-bold text-[#14213D]">Terminal Studio</span>
-          </div>
-        </div>
-
-        <button
-          onClick={handleInsertIntoDocument}
-          className="px-4 py-2 font-bold text-white bg-[#1F3A8A] hover:bg-[#1A3175] rounded-xl text-xs shadow-xs transition-all flex items-center gap-1.5"
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Insert into Document</span>
-        </button>
-      </header>
+      <TopBar />
 
       {/* Main Studio Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
