@@ -23,6 +23,7 @@ import { runJavaScriptInBrowser, runPythonInBrowser, ExecutionResult } from '@/l
 import { useEditorStore } from '@/lib/store/editor-store';
 import { TopBar } from '@/components/navigation/TopBar';
 import { generateTerminalScreenshotDataUrl } from '@/lib/engine/terminal-canvas';
+import { registerImage } from '@/lib/engine/image-registry';
 
 export type TerminalTheme =
   | 'windows-terminal'
@@ -190,8 +191,9 @@ export default function TerminalStudioPage() {
   // Option 1: Append screenshot to current assignment
   const handleAppendToHandwriting = () => {
     const screenshotDataUrl = generateScreenshotDataUrl();
+    const imgId = registerImage(screenshotDataUrl, `Terminal ${language.toUpperCase()} Output`);
     const currentDoc = useEditorStore.getState().content;
-    const snippet = `\n\n**Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**\n\n![Terminal Execution](${screenshotDataUrl})\n`;
+    const snippet = `\n\n**Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**\n\n![Terminal Output](attachment:${imgId})\n`;
     setContent(currentDoc + snippet);
     router.push('/');
   };
@@ -199,6 +201,7 @@ export default function TerminalStudioPage() {
   // Option 2: Replace / Create new assignment document
   const handleCreateNewDocument = () => {
     const screenshotDataUrl = generateScreenshotDataUrl();
+    const imgId = registerImage(screenshotDataUrl, `Terminal ${language.toUpperCase()} Output`);
     const formattedBlock = `# Coding Assignment Solution (${language.toUpperCase()})
 
 \`\`\`${language}
@@ -207,7 +210,7 @@ ${code}
 
 **Executed Terminal Screenshot (${executionResult?.mode === 'executed-browser' ? 'Executed in browser' : 'Simulated'}):**
 
-![Terminal Execution](${screenshotDataUrl})
+![Terminal Output](attachment:${imgId})
 
 The program completed execution with status code 0.
 `;
@@ -220,7 +223,8 @@ The program completed execution with status code 0.
   // Option 3: Copy markdown tag to clipboard
   const handleCopyMarkdownTag = () => {
     const screenshotDataUrl = generateScreenshotDataUrl();
-    navigator.clipboard.writeText(`![Terminal Screenshot](${screenshotDataUrl})`);
+    const imgId = registerImage(screenshotDataUrl, `Terminal ${language.toUpperCase()} Output`);
+    navigator.clipboard.writeText(`![Terminal Output](attachment:${imgId})`);
     setToastMessage('Screenshot code copied! Paste (Ctrl+V) anywhere in your handwritten notes.');
     setIsEmbedMenuOpen(false);
     setTimeout(() => setToastMessage(null), 3500);

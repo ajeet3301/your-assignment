@@ -12,6 +12,7 @@ import {
 import {
   generateTerminalScreenshotDataUrl,
 } from '@/lib/engine/terminal-canvas';
+import { registerImage } from '@/lib/engine/image-registry';
 
 export type TerminalTheme =
   | 'windows-terminal'
@@ -130,7 +131,8 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
       commandName: command,
     });
 
-    const markdown = `\n\n![${command || 'Terminal Output'}](${dataUrl})\n\n`;
+    const imgId = registerImage(dataUrl, command || 'Terminal Output');
+    const markdown = `\n\n![${command || 'Terminal Output'}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };
@@ -153,7 +155,8 @@ export const InsertImageModal: React.FC<InsertImageModalProps> = ({
 
   const handleInsertUpload = () => {
     if (!imagePreview) return;
-    const markdown = `\n\n![${altText || 'Screenshot'}](${imagePreview})\n\n`;
+    const imgId = registerImage(imagePreview, altText || 'Screenshot');
+    const markdown = `\n\n![${altText || 'Screenshot'}](attachment:${imgId})\n\n`;
     onInsert(markdown);
     onClose();
   };

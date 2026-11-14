@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Heading1,
   Heading2,
@@ -14,12 +14,14 @@ import {
   Check,
   X,
   Palette,
+  Sparkles,
 } from 'lucide-react';
 import { useEditorStore } from '@/lib/store/editor-store';
 import { FontDropdown } from './FontDropdown';
 import { ColorPickerToolbar, ColorTargetScope, INK_COLOR_PRESETS } from './ColorPickerToolbar';
 import { HandwritingFont } from '@/lib/engine/fonts';
 import { InsertImageModal } from './InsertImageModal';
+import { registerImage, sanitizeDocumentImages } from '@/lib/engine/image-registry';
 
 const SAMPLE_ASSIGNMENT = `# Computer Networks & Distributed Systems
 Assignment 3 - Question 1
@@ -58,6 +60,18 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onHoverFont }) => {
   }>({ start: 0, end: 0, text: '' });
 
   const hasSelection = selectionRange.start !== selectionRange.end && selectionRange.text.length > 0;
+
+  // Auto-migrate any bulky base64 data URLs into clean, readable attachment tags
+  useEffect(() => {
+    if (content && (content.includes('data:image/') || content.includes(';base64,'))) {
+      const { cleanText, migratedCount } = sanitizeDocumentImages(content);
+      if (migratedCount > 0 && cleanText !== content) {
+        setContent(cleanText);
+        setPasteNotice(`Cleaned up ${migratedCount} image(s) to short attachment tag!`);
+        setTimeout(() => setPasteNotice(null), 3000);
+      }
+    }
+  }, [content, setContent]);
 
   const updateSelectionState = () => {
     const el = textareaRef.current;
@@ -192,7 +206,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onHoverFont }) => {
           const reader = new FileReader();
           reader.onload = () => {
             const base64 = reader.result as string;
-            insertAtCursor(`\n\n![Pasted Screenshot](${base64})\n\n`);
+            const imgId = registerImage(base64, 'Pasted Screenshot');
+            insertAtCursor(`\n\n![Pasted Screenshot](attachment:${imgId})\n\n`);
             setPasteNotice('Screenshot pasted & embedded into handwritten page!');
             setTimeout(() => setPasteNotice(null), 3000);
           };

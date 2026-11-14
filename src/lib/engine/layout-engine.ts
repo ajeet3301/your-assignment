@@ -1,5 +1,6 @@
 import { EngineSettings, PageLayout, MeasuredLine, TextSpan, A4_WIDTH_MM, A4_HEIGHT_MM } from './types';
 import { getRulingMetrics } from './paper-ruling';
+import { resolveImageUrl } from './image-registry';
 
 export interface LayoutOptions {
   canvasWidth: number;
@@ -130,9 +131,15 @@ export function calculateDocumentLayout(
   for (let pIdx = 0; pIdx < rawParagraphs.length; pIdx++) {
     const paragraph = rawParagraphs[pIdx];
 
-    // Image Block Check: ![alt](url)
+    // Image Block Check: ![alt](url) or loose data:image URL
     const imageMatch = paragraph.trim().match(/^!\[([^\]]*)\]\((.+)\)$/);
-    if (imageMatch) {
+    const looseDataUrlMatch = !imageMatch && paragraph.trim().startsWith('data:image/')
+      ? paragraph.trim().match(/^(data:image\/[a-zA-Z0-9+]+;base64,[A-Za-z0-9+/=]+)$/)
+      : null;
+
+    if (imageMatch || looseDataUrlMatch) {
+      const rawUrl = imageMatch ? imageMatch[2] : looseDataUrlMatch![1];
+      const resolvedUrl = resolveImageUrl(rawUrl);
       const imgWidth = Math.min(usableWidth, 620 * (canvasWidth / 800));
       const imgHeight = Math.round(imgWidth * 0.48);
 
@@ -150,7 +157,7 @@ export function calculateDocumentLayout(
         y: currentY,
         height: imgHeight,
         isImage: true,
-        imageUrl: imageMatch[2],
+        imageUrl: resolvedUrl,
         imageWidth: imgWidth,
         imageHeight: imgHeight,
       });

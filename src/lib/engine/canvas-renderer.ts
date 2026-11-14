@@ -2,6 +2,7 @@ import { PRNG } from './prng';
 import { EngineSettings, PageLayout, A4_WIDTH_MM, A4_HEIGHT_MM, PREVIEW_SCALE_DPI } from './types';
 import { PEN_PROFILES } from './pen-effects';
 import { drawPaperBackground } from './paper-ruling';
+import { resolveImageUrl } from './image-registry';
 
 export interface RenderPageOptions {
   canvas: HTMLCanvasElement;
@@ -140,15 +141,16 @@ export function renderHandwrittenPage(options: RenderPageOptions) {
 
     // Image Block (e.g. Terminal Screenshot or Diagram)
     if (line.isImage && line.imageUrl) {
-      let img = imageCache.get(line.imageUrl);
+      const resolvedSrc = resolveImageUrl(line.imageUrl);
+      let img = imageCache.get(resolvedSrc);
       if (!img) {
         img = new Image();
         img.onload = () => {
           // Re-render once image is loaded into memory
           renderHandwrittenPage(options);
         };
-        img.src = line.imageUrl;
-        imageCache.set(line.imageUrl, img);
+        img.src = resolvedSrc;
+        imageCache.set(resolvedSrc, img);
       }
 
       const imgX = leftMarginPx;
@@ -157,23 +159,51 @@ export function renderHandwrittenPage(options: RenderPageOptions) {
       const imgH = line.imageHeight || Math.round(imgW * 0.48);
 
       ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+      // Reset compositing from pen's blendMode ('multiply') to normal 'source-over'
+      // so screenshot pixels are never multiplied into solid black!
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Realistic photo / screenshot shadow on paper
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.18)';
       ctx.shadowBlur = 10 * scale;
       ctx.shadowOffsetY = 4 * scale;
 
-      // Draw rounded container & image
+      // Draw clean backing container
       ctx.beginPath();
-      ctx.roundRect(imgX, imgY, imgW, imgH, 8 * scale);
-      ctx.fillStyle = '#0C0C0C';
+      ctx.roundRect(imgX, imgY, imgW, imgH, 6 * scale);
+      ctx.fillStyle = '#FFFFFF';
       ctx.fill();
+
+      // Clear shadow before drawing the image content
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
 
       if (img.complete && img.naturalWidth > 0) {
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect(imgX, imgY, imgW, imgH, 8 * scale);
+        ctx.roundRect(imgX, imgY, imgW, imgH, 6 * scale);
         ctx.clip();
         ctx.drawImage(img, imgX, imgY, imgW, imgH);
         ctx.restore();
+
+        // Subtle realistic border
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+        ctx.lineWidth = 1 * scale;
+        ctx.beginPath();
+        ctx.roundRect(imgX, imgY, imgW, imgH, 6 * scale);
+        ctx.stroke();
+      } else {
+        // Clean loading card placeholder
+        ctx.fillStyle = '#F3F4F6';
+        ctx.beginPath();
+        ctx.roundRect(imgX, imgY, imgW, imgH, 6 * scale);
+        ctx.fill();
+
+        ctx.fillStyle = '#6B7280';
+        ctx.font = `${12 * scale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('📷 Loading Screenshot...', imgX + imgW / 2, imgY + imgH / 2);
       }
 
       ctx.restore();

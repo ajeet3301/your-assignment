@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { checkFontMagicBytes, validateFontFile } from '../lib/engine/font-validator';
 import { parseSpans, calculateDocumentLayout } from '../lib/engine/layout-engine';
+import { registerImage, resolveImageUrl, sanitizeDocumentImages } from '../lib/engine/image-registry';
 import { DEFAULT_SETTINGS } from '../lib/store/editor-store';
 import { A4_WIDTH_PREVIEW, A4_HEIGHT_PREVIEW } from '../lib/engine/types';
 import fs from 'fs';
@@ -158,5 +159,34 @@ At extremely high thermodynamic temperatures, quantum effects converge to classi
     expect(imageLine).toBeDefined();
     expect(imageLine?.imageUrl).toContain('data:image/png;base64');
     expect(imageLine?.height).toBeGreaterThan(50);
+  });
+
+  it('image registry registers dataUrl and resolves attachment tags cleanly', () => {
+    const dummyDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const id = registerImage(dummyDataUrl, 'My Screenshot');
+    expect(id).toMatch(/^img_/);
+
+    const resolved = resolveImageUrl(`attachment:${id}`);
+    expect(resolved).toBe(dummyDataUrl);
+  });
+
+  it('sanitizeDocumentImages replaces bulky raw base64 data with concise attachment tags', () => {
+    const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='.repeat(5);
+    const bulkyDoc = `Problem 1\n\n![Terminal Output](data:image/png;base64,${fakeBase64})\n\nFinal text`;
+
+    const { cleanText, migratedCount } = sanitizeDocumentImages(bulkyDoc);
+    expect(migratedCount).toBe(1);
+    expect(cleanText).not.toContain('data:image/png;base64');
+    expect(cleanText).toMatch(/!\[Terminal Output\]\(attachment:img_[^)]+\)/);
+
+    // Verify layout engine resolves the attachment cleanly
+    const pages = calculateDocumentLayout(cleanText, {
+      canvasWidth: A4_WIDTH_PREVIEW,
+      canvasHeight: A4_HEIGHT_PREVIEW,
+      settings: DEFAULT_SETTINGS,
+    });
+    const imgLine = pages[0].lines.find((l) => l.isImage);
+    expect(imgLine).toBeDefined();
+    expect(imgLine?.imageUrl).toContain('data:image/png;base64');
   });
 });
