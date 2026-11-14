@@ -44,7 +44,7 @@ export async function solveQuestionWithAi(
         : 'https://openrouter.ai/api/v1/chat/completions';
 
       const candidateModels = isGroq
-        ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'].filter(Boolean) as string[]
+        ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'].filter(Boolean) as string[]
         : [process.env.AI_PRIMARY_MODEL, 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free'].filter(Boolean) as string[];
 
       for (const model of Array.from(new Set(candidateModels))) {
@@ -128,7 +128,7 @@ export async function autoFixCodeWithAi(
       : 'https://openrouter.ai/api/v1/chat/completions';
 
     const candidateModels = isGroq
-      ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'].filter(Boolean) as string[]
+      ? [process.env.AI_PRIMARY_MODEL, 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'].filter(Boolean) as string[]
       : [process.env.AI_PRIMARY_MODEL, 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free'].filter(Boolean) as string[];
 
     for (const model of Array.from(new Set(candidateModels))) {
