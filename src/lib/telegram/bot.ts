@@ -1336,6 +1336,7 @@ async function renderHandwritingMenu(ctx: any) {
   const session = getSession(chatId);
 
   const fontNameMap: Record<string, string> = {
+    'homemade-apple': 'Homemade Apple (Default Cursive)',
     kalam: 'Kalam (Neat Indian)',
     'patrick-hand': 'Patrick Hand (Classroom)',
     caveat: 'Caveat (Fluid Cursive)',
@@ -1343,23 +1344,23 @@ async function renderHandwritingMenu(ctx: any) {
   };
 
   const inkNameMap: Record<string, string> = {
-    blue: 'Royal Blue (#1A3673)',
-    black: 'Jet Black (#1F2421)',
+    blue: 'Royal Blue (Answers in Blue)',
+    black: 'Jet Black (Questions in Black)',
     red: 'Crimson Red (#9B1D20)',
     green: 'Emerald Green (#1E5E3A)',
   };
 
   const paperNameMap: Record<string, string> = {
-    ruled: 'Ruled Medium (Standard)',
+    plain: 'Blank / Plain Page (Default)',
+    ruled: 'Ruled Medium Lines',
     margin: 'Ruled with Red Margin',
-    plain: 'Plain Off-White Sheet',
   };
 
   const text =
     `✍️ **Handwritten Submission Studio**\n\n` +
-    `Render your assignment with organic handwriting physics on realistic notebook paper:\n\n` +
+    `Render your assignment with organic handwriting physics on realistic paper:\n\n` +
     `• **Font**: ${fontNameMap[session.hwFont] || session.hwFont}\n` +
-    `• **Ink Color**: ${inkNameMap[session.hwColor] || session.hwColor}\n` +
+    `• **Color Format**: Questions in Black, Answers in ${inkNameMap[session.hwColor] || session.hwColor}\n` +
     `• **Paper Style**: ${paperNameMap[session.hwPaper] || session.hwPaper}\n\n` +
     `Tap **Generate Handwritten PDF** below when ready, or customize styles:`;
 
@@ -1377,6 +1378,8 @@ async function renderHandwritingMenu(ctx: any) {
 
 async function renderFontSubmenu(ctx: any) {
   const keyboard = new InlineKeyboard()
+    .text('✍️ Homemade Apple (Default Cursive)', 'hw_f_homemade-apple')
+    .row()
     .text('Kalam (Neat Hindi/English)', 'hw_f_kalam')
     .row()
     .text('Patrick Hand (Classroom)', 'hw_f_patrick-hand')
@@ -1392,24 +1395,24 @@ async function renderFontSubmenu(ctx: any) {
 
 async function renderInkSubmenu(ctx: any) {
   const keyboard = new InlineKeyboard()
-    .text('🔵 Royal Blue Gel Pen', 'hw_c_blue')
-    .text('⚫ Jet Black Ballpoint', 'hw_c_black')
+    .text('🔵 Royal Blue (Answers)', 'hw_c_blue')
+    .text('⚫ Jet Black Pen', 'hw_c_black')
     .row()
     .text('🔴 Crimson Red Pen', 'hw_c_red')
     .text('🟢 Emerald Green Pen', 'hw_c_green')
     .row()
     .text('⬅️ Back to Handwriting Menu', 'hw_menu');
 
-  await ctx.reply('🎨 **Choose Ink Color:**', { reply_markup: keyboard });
+  await ctx.reply('🎨 **Choose Ink Color for Answers:**\n_(Questions are automatically written in Black ink)_', { reply_markup: keyboard });
 }
 
 async function renderPaperSubmenu(ctx: any) {
   const keyboard = new InlineKeyboard()
+    .text('📄 Blank / Plain Page (Default)', 'hw_p_plain')
+    .row()
     .text('📏 Ruled Medium Lines', 'hw_p_ruled')
     .row()
     .text('📑 Ruled with Red Margin Line', 'hw_p_margin')
-    .row()
-    .text('📄 Plain Off-White Paper', 'hw_p_plain')
     .row()
     .text('⬅️ Back to Handwriting Menu', 'hw_menu');
 
@@ -1442,9 +1445,11 @@ async function sendHandwritingFollowup(ctx: any) {
         outputScreenshotDataUrl: q.outputScreenshotDataUrl,
       })),
       screenshots: session.screenshots,
-      font: session.hwFont,
-      inkColor: session.hwColor,
-      paperStyle: session.hwPaper,
+      font: session.hwFont || 'homemade-apple',
+      inkColor: session.hwColor || 'blue',
+      paperStyle: session.hwPaper || 'plain',
+      questionColor: 'black',
+      answerColor: session.hwColor || 'blue',
     });
 
     const hwFilename = session.filename.replace(/\.docx$/i, '_Handwritten.pdf');
@@ -1458,9 +1463,9 @@ async function sendHandwritingFollowup(ctx: any) {
     await ctx.replyWithDocument(new InputFile(hwPdfBuffer, hwFilename), {
       caption:
         `✍️ **Handwritten Assignment Submission** (\`${hwFilename}\`)\n` +
-        `• Font: ${session.hwFont}  |  Ink: ${session.hwColor}  |  Paper: ${session.hwPaper}\n` +
+        `• Font: ${session.hwFont}  |  Questions: Black  |  Answers: ${session.hwColor}  |  Paper: ${session.hwPaper}\n` +
         `• Student: ${session.header.studentName} (${session.header.rollNo})\n` +
-        `• A4 150 DPI with paper ruling & handwriting physics.`,
+        `• A4 150 DPI blank page with realistic cursive handwriting.`,
       parse_mode: 'Markdown',
       reply_markup: hwFollowupKeyboard,
     });

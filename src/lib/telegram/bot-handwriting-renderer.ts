@@ -8,9 +8,11 @@ export interface HandwritingRenderOptions {
   header: StudentSubmissionHeader;
   questions: SolvedQuestionDocItem[];
   screenshots?: { label: string; buffer: Buffer }[];
-  font?: string; // 'kalam' | 'patrick-hand' | 'caveat' | 'shadows-into-light'
+  font?: string; // 'homemade-apple' | 'kalam' | 'patrick-hand' | 'caveat' | 'shadows-into-light'
   inkColor?: string; // 'blue' | 'black' | 'red' | 'green' | hex
-  paperStyle?: string; // 'ruled' | 'margin' | 'plain'
+  paperStyle?: string; // 'plain' (blank) | 'ruled' | 'margin'
+  questionColor?: string; // 'black' | hex
+  answerColor?: string; // 'blue' | hex
 }
 
 // 150 DPI A4 Dimensions in Pixels (210mm x 297mm)
@@ -18,8 +20,8 @@ const A4_WIDTH_150DPI = 1240;
 const A4_HEIGHT_150DPI = 1754;
 
 const INK_COLORS: Record<string, string> = {
-  blue: '#1A3673',
-  black: '#1F2421',
+  blue: '#1A3673', // Rich Royal Blue Ink (Answers)
+  black: '#111827', // Pitch Black Ink (Questions & Header)
   red: '#9B1D20',
   green: '#1E5E3A',
 };
@@ -32,6 +34,7 @@ function ensureFontsRegistered() {
   fontsRegistered = true;
 
   const fontDefs = [
+    { file: 'HomemadeApple-Regular.ttf', alias: 'Homemade Apple' },
     { file: 'Kalam-Regular.ttf', alias: 'Kalam' },
     { file: 'PatrickHand-Regular.ttf', alias: 'Patrick Hand' },
     { file: 'Caveat-Regular.ttf', alias: 'Caveat' },
@@ -56,11 +59,13 @@ function ensureFontsRegistered() {
  * Resolves font family name registered in GlobalFonts
  */
 function resolveFontFamily(requested?: string): string {
-  const norm = (requested || 'kalam').toLowerCase().trim();
-  if (norm.includes('patrick')) return 'Patrick Hand, sans-serif';
-  if (norm.includes('caveat')) return 'Caveat, cursive, sans-serif';
-  if (norm.includes('shadow')) return 'Shadows Into Light, cursive, sans-serif';
-  return 'Kalam, cursive, sans-serif';
+  const norm = (requested || 'homemade-apple').toLowerCase().trim();
+  if (norm.includes('apple') || norm.includes('homemade')) return '"Homemade Apple", cursive, sans-serif';
+  if (norm.includes('patrick')) return '"Patrick Hand", sans-serif';
+  if (norm.includes('caveat')) return '"Caveat", cursive, sans-serif';
+  if (norm.includes('shadow')) return '"Shadows Into Light", cursive, sans-serif';
+  if (norm.includes('kalam')) return '"Kalam", cursive, sans-serif';
+  return '"Homemade Apple", cursive, sans-serif';
 }
 
 /**
@@ -72,7 +77,7 @@ function resolveInkColor(color?: string): string {
 }
 
 /**
- * Draws paper background (ruled, margin, or plain)
+ * Draws paper background (plain/blank, ruled, or margin)
  */
 function drawPaper(
   ctx: any,
@@ -80,11 +85,12 @@ function drawPaper(
   height: number,
   paperStyle: string
 ) {
-  // Off-white / cream paper
-  ctx.fillStyle = '#FAF7F0';
+  const style = (paperStyle || 'plain').toLowerCase();
+
+  // Pure clean white blank page for 'plain', and natural off-white for 'ruled'/'margin'
+  ctx.fillStyle = style === 'plain' || style === 'blank' ? '#FFFFFF' : '#FAF7F0';
   ctx.fillRect(0, 0, width, height);
 
-  const style = (paperStyle || 'ruled').toLowerCase();
   const lineSpacing = 36;
   const startY = 120;
   const endY = height - 80;
@@ -155,6 +161,11 @@ function wrapText(
 
 /**
  * Server-safe Handwritten PDF Generator using @napi-rs/canvas and pdf-lib
+ * Defaults to:
+ * - Font: "Homemade Apple"
+ * - Paper: "plain" (blank page)
+ * - Question: Black Ink (#111827)
+ * - Answer: Royal Blue Ink (#1A3673)
  */
 export async function renderServerHandwrittenPdf(
   options: HandwritingRenderOptions
@@ -165,17 +176,19 @@ export async function renderServerHandwrittenPdf(
     header,
     questions,
     screenshots = [],
-    font = 'kalam',
+    font = 'homemade-apple',
     inkColor = 'blue',
-    paperStyle = 'ruled',
+    paperStyle = 'plain',
+    questionColor = 'black',
+    answerColor,
   } = options;
 
   const fontFamily = resolveFontFamily(font);
-  const mainInk = resolveInkColor(inkColor);
-  const accentInk = INK_COLORS.red;
+  const questionInk = resolveInkColor(questionColor || 'black');
+  const answerInk = resolveInkColor(answerColor || inkColor || 'blue');
 
-  const marginX = paperStyle === 'margin' ? 150 : 100;
-  const contentWidth = A4_WIDTH_150DPI - marginX - 90;
+  const marginX = paperStyle === 'margin' ? 150 : 80;
+  const contentWidth = A4_WIDTH_150DPI - marginX - 80;
 
   const canvasPages: any[] = [];
 
@@ -184,38 +197,38 @@ export async function renderServerHandwrittenPdf(
     const ctx = canvas.getContext('2d');
     drawPaper(ctx, A4_WIDTH_150DPI, A4_HEIGHT_150DPI, paperStyle);
     canvasPages.push(canvas);
-    return { canvas, ctx, currentY: 130 };
+    return { canvas, ctx, currentY: 120 };
   }
 
   let { ctx, currentY } = createNewPage();
 
   const checkPageBreak = (neededHeight: number) => {
-    if (currentY + neededHeight > A4_HEIGHT_150DPI - 100) {
+    if (currentY + neededHeight > A4_HEIGHT_150DPI - 90) {
       const next = createNewPage();
       ctx = next.ctx;
       currentY = next.currentY;
     }
   };
 
-  // 1. Student Header on First Page
+  // 1. Student Header on First Page (In Black)
   ctx.save();
   ctx.font = `bold 28px ${fontFamily}`;
-  ctx.fillStyle = mainInk;
+  ctx.fillStyle = questionInk;
   ctx.fillText(header.assignmentTitle.toUpperCase(), marginX, currentY);
-  currentY += 36;
+  currentY += 38;
 
   ctx.font = `20px ${fontFamily}`;
-  ctx.fillStyle = mainInk;
+  ctx.fillStyle = questionInk;
   const subMeta = `Name: ${header.studentName}    Roll No: ${header.rollNo}    Class: ${header.className}`;
   ctx.fillText(subMeta, marginX, currentY);
-  currentY += 28;
+  currentY += 30;
 
   const courseMeta = `Subject: ${header.subject}`;
   ctx.fillText(courseMeta, marginX, currentY);
-  currentY += 24;
+  currentY += 26;
 
-  // Hand-drawn wavy line
-  ctx.strokeStyle = mainInk;
+  // Hand-drawn wavy divider line in Black
+  ctx.strokeStyle = questionInk;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(marginX, currentY);
@@ -224,55 +237,56 @@ export async function renderServerHandwrittenPdf(
     ctx.lineTo(x, currentY + yOffset);
   }
   ctx.stroke();
-  currentY += 36;
+  currentY += 38;
   ctx.restore();
 
-  // 2. Render Questions & Answers
+  // 2. Render Questions (in Black) & Answers (in Blue)
   for (let qIdx = 0; qIdx < questions.length; qIdx++) {
     const q = questions[qIdx];
     checkPageBreak(120);
 
-    // Question Label & Text
+    // Question Label & Text (In Black)
     ctx.save();
     ctx.font = `bold 22px ${fontFamily}`;
-    ctx.fillStyle = accentInk;
+    ctx.fillStyle = questionInk;
     const labelText = `${q.numberLabel || `Q${qIdx + 1}`}:`;
     ctx.fillText(labelText, marginX, currentY);
 
-    ctx.font = `bold 21px ${fontFamily}`;
-    ctx.fillStyle = mainInk;
+    ctx.font = `21px ${fontFamily}`;
+    ctx.fillStyle = questionInk;
     const labelMetrics = ctx.measureText(labelText);
     const qIndent = labelMetrics.width + 12;
 
     const qLines = wrapText(ctx, q.questionText, contentWidth - qIndent);
     for (let l = 0; l < qLines.length; l++) {
-      if (l > 0) checkPageBreak(30);
+      if (l > 0) checkPageBreak(32);
       const xPos = l === 0 ? marginX + qIndent : marginX;
       ctx.fillText(qLines[l], xPos, currentY);
-      currentY += 32;
+      currentY += 34;
     }
     ctx.restore();
-    currentY += 8;
+    currentY += 10;
 
-    // Answer Body
+    // Answer Body (In Blue)
     const answerText = q.answer || q.explanation || '';
     if (answerText.trim()) {
       checkPageBreak(80);
       ctx.save();
       ctx.font = `bold 20px ${fontFamily}`;
-      ctx.fillStyle = mainInk;
+      ctx.fillStyle = answerInk;
       ctx.fillText('Ans:', marginX, currentY);
-      currentY += 30;
+      currentY += 32;
 
       ctx.font = `20px ${fontFamily}`;
+      ctx.fillStyle = answerInk;
       const ansLines = wrapText(ctx, answerText, contentWidth - 20);
       for (const line of ansLines) {
-        checkPageBreak(30);
+        checkPageBreak(32);
         ctx.fillText(line, marginX + 15, currentY);
-        currentY += 32;
+        currentY += 34;
       }
       ctx.restore();
-      currentY += 10;
+      currentY += 14;
     }
 
     // Code Snippet (if any)

@@ -591,6 +591,26 @@ print("Comparisons performed: 6")
 
       expect(pdfMargin).toBeInstanceOf(Buffer);
       expect(pdfMargin.slice(0, 4).toString()).toBe('%PDF');
+
+      // Test with Default Options: Homemade Apple, Blank Page, Questions Black, Answers Blue
+      const pdfDefaultBlank = await renderServerHandwrittenPdf({
+        header: {
+          studentName: 'Ajeet kumar',
+          rollNo: '255ISC014',
+          className: 'int btech cse',
+          subject: 'Database Management Systems',
+          assignmentTitle: 'DBMS ASSIGNMENT 2',
+        },
+        questions,
+        font: 'homemade-apple',
+        paperStyle: 'plain',
+        questionColor: 'black',
+        answerColor: 'blue',
+      });
+
+      expect(pdfDefaultBlank).toBeInstanceOf(Buffer);
+      expect(pdfDefaultBlank.length).toBeGreaterThan(20000);
+      expect(pdfDefaultBlank.slice(0, 4).toString()).toBe('%PDF');
     });
 
     it('All inline keyboard callback_data strings are strictly under 64 bytes', () => {
