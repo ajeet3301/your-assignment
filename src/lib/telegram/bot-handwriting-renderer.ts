@@ -39,6 +39,8 @@ function ensureFontsRegistered() {
     { file: 'PatrickHand-Regular.ttf', alias: 'Patrick Hand' },
     { file: 'Caveat-Regular.ttf', alias: 'Caveat' },
     { file: 'ShadowsIntoLight-Regular.ttf', alias: 'Shadows Into Light' },
+    { file: 'RobotoMono-Regular.ttf', alias: 'TerminalMono' },
+    { file: 'Inter-Regular.ttf', alias: 'TerminalHeader' },
   ];
 
   const fontsDir = path.join(process.cwd(), 'public', 'fonts');
@@ -265,52 +267,94 @@ export async function renderServerHandwrittenPdf(
       currentY += 34;
     }
     ctx.restore();
-    currentY += 10;
+    currentY += 12;
 
-    // Answer Body (In Blue)
-    const answerText = q.answer || q.explanation || '';
-    if (answerText.trim()) {
+    // Check if question has code snippet
+    if (q.codeSnippet && q.codeSnippet.trim()) {
       checkPageBreak(80);
       ctx.save();
       ctx.font = `bold 20px ${fontFamily}`;
       ctx.fillStyle = answerInk;
-      ctx.fillText('Ans:', marginX, currentY);
-      currentY += 32;
-
-      ctx.font = `20px ${fontFamily}`;
-      ctx.fillStyle = answerInk;
-      const ansLines = wrapText(ctx, answerText, contentWidth - 20);
-      for (const line of ansLines) {
-        checkPageBreak(32);
-        ctx.fillText(line, marginX + 15, currentY);
-        currentY += 34;
-      }
+      const langLabel = q.codeLanguage ? q.codeLanguage.toUpperCase() : 'CODE';
+      ctx.fillText(`Program (${langLabel}):`, marginX, currentY);
+      currentY += 28;
       ctx.restore();
-      currentY += 14;
-    }
 
-    // Code Snippet (if any)
-    if (q.codeSnippet && q.codeSnippet.trim()) {
-      const codeLines = q.codeSnippet.trim().split('\n').slice(0, 15);
-      const boxHeight = codeLines.length * 24 + 20;
+      const codeLines = q.codeSnippet.trim().split('\n').slice(0, 45);
+      const codeLineHeight = 22;
+      const boxHeight = codeLines.length * codeLineHeight + 24;
       checkPageBreak(boxHeight + 20);
 
       ctx.save();
-      ctx.fillStyle = 'rgba(235, 240, 248, 0.6)';
-      ctx.strokeStyle = 'rgba(70, 95, 133, 0.3)';
+      ctx.fillStyle = 'rgba(245, 248, 252, 0.95)';
+      ctx.strokeStyle = 'rgba(30, 58, 138, 0.25)';
       ctx.lineWidth = 1;
-      ctx.fillRect(marginX, currentY, contentWidth, boxHeight);
-      ctx.strokeRect(marginX, currentY, contentWidth, boxHeight);
+      if (typeof (ctx as any).roundRect === 'function') {
+        (ctx as any).roundRect(marginX, currentY, contentWidth, boxHeight, 8);
+      } else {
+        ctx.rect(marginX, currentY, contentWidth, boxHeight);
+      }
+      ctx.fill();
+      ctx.stroke();
 
-      ctx.font = '16px Consolas, monospace';
-      ctx.fillStyle = '#1e293b';
+      ctx.font = '14px TerminalMono, Consolas, Monaco, monospace';
+      ctx.fillStyle = '#0F172A';
       let codeY = currentY + 20;
-      for (const cl of codeLines) {
-        ctx.fillText(cl.slice(0, 80), marginX + 16, codeY);
-        codeY += 24;
+      for (let cIdx = 0; cIdx < codeLines.length; cIdx++) {
+        const cl = codeLines[cIdx];
+        // Line number
+        ctx.fillStyle = '#94A3B8';
+        ctx.fillText(String(cIdx + 1).padStart(2, ' '), marginX + 12, codeY);
+        // Code text
+        ctx.fillStyle = '#0F172A';
+        ctx.fillText(cl.slice(0, 85), marginX + 40, codeY);
+        codeY += codeLineHeight;
       }
       ctx.restore();
       currentY += boxHeight + 16;
+
+      // Explanation (if present and distinct from code)
+      if (q.explanation && q.explanation.trim() && q.explanation.trim() !== q.codeSnippet.trim()) {
+        checkPageBreak(60);
+        ctx.save();
+        ctx.font = `bold 18px ${fontFamily}`;
+        ctx.fillStyle = answerInk;
+        ctx.fillText('Explanation / Output:', marginX, currentY);
+        currentY += 26;
+
+        ctx.font = `18px ${fontFamily}`;
+        ctx.fillStyle = answerInk;
+        const expLines = wrapText(ctx, q.explanation.trim(), contentWidth - 20);
+        for (const line of expLines) {
+          checkPageBreak(30);
+          ctx.fillText(line, marginX + 15, currentY);
+          currentY += 30;
+        }
+        ctx.restore();
+        currentY += 12;
+      }
+    } else {
+      // Pure Theory / Numerical / MCQ Answer Body (In Blue)
+      const answerText = q.answer || q.explanation || '';
+      if (answerText.trim()) {
+        checkPageBreak(80);
+        ctx.save();
+        ctx.font = `bold 20px ${fontFamily}`;
+        ctx.fillStyle = answerInk;
+        ctx.fillText('Ans:', marginX, currentY);
+        currentY += 32;
+
+        ctx.font = `20px ${fontFamily}`;
+        ctx.fillStyle = answerInk;
+        const ansLines = wrapText(ctx, answerText, contentWidth - 20);
+        for (const line of ansLines) {
+          checkPageBreak(32);
+          ctx.fillText(line, marginX + 15, currentY);
+          currentY += 34;
+        }
+        ctx.restore();
+        currentY += 14;
+      }
     }
 
     // Terminal Screenshot / Diagram (if available)

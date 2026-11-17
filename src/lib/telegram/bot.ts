@@ -1244,9 +1244,23 @@ async function executeAndSendAssignment(ctx: any, options: { skipErrors?: boolea
       );
     }
 
+    // Update session questions with solved items (including codeSnippet, explanation, and screenshots)
+    const updatedQuestions = solvedItems.map((si) => ({
+      id: si.id,
+      numberLabel: si.numberLabel,
+      text: si.questionText,
+      type: (si.codeSnippet ? 'code' : 'theory') as any,
+      codeSnippet: si.codeSnippet,
+      codeLanguage: si.codeLanguage,
+      answer: si.codeSnippet || si.explanation,
+      explanation: si.explanation,
+      outputScreenshotDataUrl: si.outputScreenshotDataUrl,
+    }));
+
     // Store in session for on-demand follow-ups
     updateSession(chatId, {
       currentStep: 'completed',
+      questions: updatedQuestions,
       generatedDocxBuffer: docxBuffer || undefined,
       screenshots: screenshotStore,
     });
@@ -1254,7 +1268,7 @@ async function executeAndSendAssignment(ctx: any, options: { skipErrors?: boolea
 
     // If user requested Handwritten PDF or Both in summary:
     if (session.outputFormat === 'hw_pdf' || session.outputFormat === 'both') {
-      await sendHandwritingFollowup(ctx);
+      await sendHandwritingFollowup(ctx, solvedItems);
     }
 
     // Clean up status message
@@ -1419,11 +1433,22 @@ async function renderPaperSubmenu(ctx: any) {
   await ctx.reply('📜 **Choose Paper Ruling & Background:**', { reply_markup: keyboard });
 }
 
-async function sendHandwritingFollowup(ctx: any) {
+async function sendHandwritingFollowup(ctx: any, customQuestions?: any[]) {
   const chatId = ctx.chat.id;
   const session = getSession(chatId);
 
-  if (session.questions.length === 0) {
+  const questionsToUse = customQuestions || session.questions.map((q) => ({
+    id: q.id,
+    numberLabel: q.numberLabel,
+    questionText: q.text,
+    codeSnippet: q.codeSnippet,
+    codeLanguage: q.codeLanguage || session.language,
+    explanation: q.explanation,
+    answer: q.answer || (q.codeSnippet ? '' : q.explanation),
+    outputScreenshotDataUrl: q.outputScreenshotDataUrl,
+  }));
+
+  if (questionsToUse.length === 0) {
     await ctx.reply('⚠️ No questions found. Start fresh with /new.');
     return;
   }
@@ -1435,15 +1460,7 @@ async function sendHandwritingFollowup(ctx: any) {
   try {
     const hwPdfBuffer = await renderServerHandwrittenPdf({
       header: session.header,
-      questions: session.questions.map((q) => ({
-        id: q.id,
-        numberLabel: q.numberLabel,
-        questionText: q.text,
-        codeSnippet: q.codeSnippet,
-        codeLanguage: q.codeLanguage || session.language,
-        explanation: q.explanation,
-        outputScreenshotDataUrl: q.outputScreenshotDataUrl,
-      })),
+      questions: questionsToUse,
       screenshots: session.screenshots,
       font: session.hwFont || 'homemade-apple',
       inkColor: session.hwColor || 'blue',

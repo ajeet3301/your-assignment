@@ -165,22 +165,33 @@ async function executeGeneralCode(
     command = `run ${lang}`;
   }
 
-  // Parse simulated print outputs or comments inside code
-  const printRegex = /(?:printf|print|System\.out\.println|console\.log)\s*\((["'])([\s\S]*?)\1\)/g;
+  // 1. Parse interactive input prompts (e.g. input("Enter a: "), scanf(...))
+  const inputRegex = /(?:input|scanf)\s*\(\s*(?:["']([^"']+)["'])?/g;
+  let inMatch: RegExpExecArray | null;
+  const sampleInputs = ['15', '42', '28', '10', '20'];
+  let inIdx = 0;
+  while ((inMatch = inputRegex.exec(code)) !== null) {
+    const promptText = inMatch[1] ? inMatch[1].trim() : 'Enter input: ';
+    const simulatedVal = sampleInputs[inIdx % sampleInputs.length];
+    inIdx++;
+    outputLines.push(`${promptText} ${simulatedVal}`);
+  }
+
+  // 2. Parse simulated print outputs or comments inside code
+  const printRegex = /(?:printf|print|System\.out\.println|console\.log)\s*\((["'])([\s\S]*?)\1/g;
   let match: RegExpExecArray | null;
 
   while ((match = printRegex.exec(code)) !== null) {
-    const rawLine = match[2].replace(/\\n/g, '').replace(/%[a-z]/g, '42').trim();
-    if (rawLine) {
+    const rawLine = match[2].replace(/\\n/g, '').replace(/%[a-z]/g, '42').replace(/\{[^}]+\}/g, '42').trim();
+    if (rawLine && !outputLines.includes(rawLine)) {
       outputLines.push(rawLine);
     }
   }
 
   if (outputLines.length === 0) {
-    outputLines.push(`[Process executed successfully with exit code 0]`);
-    outputLines.push(`Output verified for: ${options.questionLabel || 'Question'}`);
-    outputLines.push(`Execution Time: 0.12 ms | Memory: 2.1 MB`);
+    outputLines.push(`Output: 42`);
   }
+  outputLines.push(`[Process finished with exit code 0]`);
 
   const screenshotBuffer = renderServerTerminalScreenshot({
     style: options.terminalStyle,

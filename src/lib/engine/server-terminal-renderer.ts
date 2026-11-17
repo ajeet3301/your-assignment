@@ -1,6 +1,33 @@
-import { createCanvas } from '@napi-rs/canvas';
+import path from 'path';
+import fs from 'fs';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 
 export type TerminalStyle = 'vscode' | 'powershell' | 'cmd' | 'ubuntu' | 'macos' | 'mysql';
+
+let terminalFontsRegistered = false;
+
+function ensureTerminalFontsRegistered() {
+  if (terminalFontsRegistered) return;
+  terminalFontsRegistered = true;
+
+  const fontDefs = [
+    { file: 'RobotoMono-Regular.ttf', alias: 'TerminalMono' },
+    { file: 'Inter-Regular.ttf', alias: 'TerminalHeader' },
+  ];
+
+  const fontsDir = path.join(process.cwd(), 'public', 'fonts');
+
+  for (const f of fontDefs) {
+    const fullPath = path.join(fontsDir, f.file);
+    try {
+      if (fs.existsSync(fullPath)) {
+        GlobalFonts.registerFromPath(fullPath, f.alias);
+      }
+    } catch (e) {
+      console.warn(`Could not register font ${f.alias} from ${fullPath}:`, e);
+    }
+  }
+}
 
 export interface ServerTerminalOptions {
   style?: TerminalStyle;
@@ -85,6 +112,8 @@ const THEMES: Record<TerminalStyle, ThemeConfig> = {
  * matching the user's selected style, prompt location, and real stdout.
  */
 export function renderServerTerminalScreenshot(options: ServerTerminalOptions): Buffer {
+  ensureTerminalFontsRegistered();
+
   const {
     style = 'vscode',
     promptLocation,
@@ -233,13 +262,13 @@ export function renderServerTerminalScreenshot(options: ServerTerminalOptions): 
 
   // Header Title
   ctx.fillStyle = currentTheme.headerText;
-  ctx.font = '600 12px sans-serif';
+  ctx.font = '600 12px TerminalHeader, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(title, width / 2, headerHeight / 2 + 4);
 
   // 3. Render Terminal Output Lines
   ctx.textAlign = 'left';
-  ctx.font = '13px Consolas, Monaco, monospace';
+  ctx.font = '13.5px TerminalMono, Consolas, Monaco, monospace';
 
   let currentY = headerHeight + padding + 14;
   for (const line of displayLines) {

@@ -611,6 +611,48 @@ print("Comparisons performed: 6")
       expect(pdfDefaultBlank).toBeInstanceOf(Buffer);
       expect(pdfDefaultBlank.length).toBeGreaterThan(20000);
       expect(pdfDefaultBlank.slice(0, 4).toString()).toBe('%PDF');
+
+      // Test with Code Snippet and Execution Screenshot
+      const { renderServerTerminalScreenshot } = await import('../lib/engine/server-terminal-renderer');
+      const termScreenshot = renderServerTerminalScreenshot({
+        style: 'vscode',
+        promptLocation: 'PS D:\\python>',
+        command: 'python solution.py',
+        outputLines: ['Enter first number: 10', 'The largest number is: 10', '[Process finished with exit code 0]'],
+      });
+      expect(termScreenshot).toBeInstanceOf(Buffer);
+      expect(termScreenshot.length).toBeGreaterThan(10000);
+
+      const codeQuestions = [
+        {
+          id: 'q1',
+          numberLabel: 'Q1',
+          questionText: 'Write a program to find the largest of three numbers.',
+          codeSnippet: 'a = int(input("Enter first: "))\nb = int(input("Enter second: "))\nprint("Largest:", max(a, b))',
+          codeLanguage: 'python',
+          explanation: 'Compares numbers and prints the maximum value.',
+        },
+      ];
+
+      const pdfWithCode = await renderServerHandwrittenPdf({
+        header: {
+          studentName: 'Ajeet kumar',
+          rollNo: '255ISC014',
+          className: 'int btech cse',
+          subject: 'Python Programming',
+          assignmentTitle: 'PYTHON ASSIGNMENT 1',
+        },
+        questions: codeQuestions,
+        screenshots: [{ label: 'Q1', buffer: termScreenshot }],
+        font: 'homemade-apple',
+        paperStyle: 'plain',
+        questionColor: 'black',
+        answerColor: 'blue',
+      });
+
+      expect(pdfWithCode).toBeInstanceOf(Buffer);
+      expect(pdfWithCode.length).toBeGreaterThan(25000);
+      expect(pdfWithCode.slice(0, 4).toString()).toBe('%PDF');
     });
 
     it('All inline keyboard callback_data strings are strictly under 64 bytes', () => {
