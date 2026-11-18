@@ -150,17 +150,20 @@ async function executeGeneralCode(
   let command = '';
   const outputLines: string[] = [];
 
-  // Match real terminal invocation command
-  if (lang === 'c') {
-    command = 'gcc solution.c -o solution && .\\solution';
-  } else if (lang === 'cpp') {
-    command = 'g++ solution.cpp -o solution && .\\solution';
+  const promptPath = options.promptLocation?.replace(/^PS\s+/i, '').replace(/>\s*$/, '').trim() || 'E:\\drive\\Semester 3\\DSA assignment';
+  const folderName = promptPath.split('\\').filter(Boolean).pop() || 'DSA assignment';
+
+  // Match authentic VS Code Code Runner / PowerShell invocation
+  if (lang === 'cpp') {
+    command = `cd "${promptPath}\\" ; if ($?) { g++ main.cpp -o main } ; if ($?) { .\\main }`;
+  } else if (lang === 'c') {
+    command = `cd "${promptPath}\\" ; if ($?) { gcc main.c -o main } ; if ($?) { .\\main }`;
   } else if (lang === 'python') {
-    command = 'python solution.py';
+    command = `cd "${promptPath}\\" ; if ($?) { python solution.py }`;
   } else if (lang === 'java') {
-    command = 'javac Solution.java && java Solution';
+    command = `cd "${promptPath}\\" ; if ($?) { javac Solution.java } ; if ($?) { java Solution }`;
   } else if (lang === 'javascript') {
-    command = 'node solution.js';
+    command = `node solution.js`;
   } else {
     command = `run ${lang}`;
   }
@@ -198,7 +201,8 @@ async function executeGeneralCode(
     promptLocation: options.promptLocation,
     command,
     outputLines,
-    width: 740,
+    windowTitle: options.questionLabel || folderName,
+    width: 780,
   });
 
   const screenshotDataUrl = `data:image/png;base64,${screenshotBuffer.toString('base64')}`;
